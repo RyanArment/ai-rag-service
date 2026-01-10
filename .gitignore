@@ -56,3 +56,7 @@ postgres_data/
 
 # pgvector build files (if building from source)
 pgvector-src/
+
+# Documentation files (keep README.md)
+*.md
+!README.md
