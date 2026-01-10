@@ -181,23 +181,3 @@ test_set = [
 report = evaluator.evaluate_batch(test_set, test_set_name="python_qa")
 evaluator.save_report(report, "evaluation_results.json")
 ```
-
-## Development Roadmap
-
-See [DAY3_PLUS_GUIDE.md](./DAY3_PLUS_GUIDE.md) for detailed implementation guide and next steps.
-
-**Current Status:** Days 1-5 Complete
-- ✅ Day 1-2: Basic setup and provider abstraction
-- ✅ Day 3: Logging, error handling, unified responses
-- ✅ Day 4: Streaming support
-- ✅ Day 5: Evaluation framework
-
-**Next Steps:**
-- Day 6-7: Embedding service
-- Day 8-10: Vector database integration
-- Day 11-12: Document processing
-- Day 13-15: RAG pipeline core
-
-## License
-
-MIT
