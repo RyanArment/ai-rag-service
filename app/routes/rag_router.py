@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.services.rag.pipeline import RAGPipeline
+from app.core.config import LLM_PROVIDER
 from app.database.database import get_db
 from app.database.repositories import QueryRepository
 from app.core.responses import APIResponse
@@ -81,12 +82,21 @@ async def rag_query(
         if filter:
             filter["source_type"] = "sec_filing"
 
+        requested_provider = http_request.headers.get("X-LLM-Provider")
+        llm_provider = requested_provider if requested_provider in {"openai", "anthropic"} else LLM_PROVIDER
+        openai_key = http_request.headers.get("X-OpenAI-Key")
+        anthropic_key = http_request.headers.get("X-Anthropic-Key")
+        llm_api_key = openai_key if llm_provider == "openai" else anthropic_key
+
         result = await rag_pipeline.query_async(
             question=request.question,
             system_prompt=request.system_prompt,
             temperature=request.temperature,
             max_tokens=request.max_tokens,
             filter=filter if filter else None,
+            llm_provider=llm_provider,
+            llm_api_key=llm_api_key,
+            embedding_api_key=openai_key,
         )
         
         latency_ms = (time.time() - start_time) * 1000

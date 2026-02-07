@@ -15,7 +15,10 @@ logger = get_logger(__name__)
 _llm_client: Optional[BaseLLMClient] = None
 
 
-def get_llm_client(provider: Optional[str] = None) -> BaseLLMClient:
+def get_llm_client(
+    provider: Optional[str] = None,
+    api_key: Optional[str] = None,
+) -> BaseLLMClient:
     """
     Get or create LLM client instance (singleton pattern).
     
@@ -32,27 +35,33 @@ def get_llm_client(provider: Optional[str] = None) -> BaseLLMClient:
     
     provider = provider or LLM_PROVIDER
     
-    # Return existing client if provider matches
-    if _llm_client and _llm_client.provider_name == provider:
+    # Return existing client if provider matches and no override key
+    if not api_key and _llm_client and _llm_client.provider_name == provider:
         return _llm_client
     
     # Create new client
     if provider == "openai":
-        if not OPENAI_API_KEY:
+        resolved_key = api_key or OPENAI_API_KEY
+        if not resolved_key:
             raise ConfigurationError(
                 "OPENAI_API_KEY not found in environment variables",
                 details={"provider": "openai"}
             )
-        _llm_client = OpenAIClient(api_key=OPENAI_API_KEY)
+        if api_key:
+            return OpenAIClient(api_key=resolved_key)
+        _llm_client = OpenAIClient(api_key=resolved_key)
         logger.info("Initialized OpenAI client", extra={"provider": "openai", "model": _llm_client.model})
         
     elif provider == "anthropic":
-        if not ANTHROPIC_API_KEY:
+        resolved_key = api_key or ANTHROPIC_API_KEY
+        if not resolved_key:
             raise ConfigurationError(
                 "ANTHROPIC_API_KEY not found in environment variables",
                 details={"provider": "anthropic"}
             )
-        _llm_client = AnthropicClient(api_key=ANTHROPIC_API_KEY)
+        if api_key:
+            return AnthropicClient(api_key=resolved_key)
+        _llm_client = AnthropicClient(api_key=resolved_key)
         logger.info("Initialized Anthropic client", extra={"provider": "anthropic", "model": _llm_client.model})
         
     else:

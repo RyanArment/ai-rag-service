@@ -36,6 +36,9 @@ class RAGPipeline:
         temperature: float = 0.7,
         max_tokens: Optional[int] = None,
         filter: Optional[Dict[str, Any]] = None,
+        llm_provider: Optional[str] = None,
+        llm_api_key: Optional[str] = None,
+        embedding_api_key: Optional[str] = None,
     ) -> dict:
         """
         Execute RAG query: retrieve context and generate answer.
@@ -50,7 +53,7 @@ class RAGPipeline:
             Dictionary with answer, context, and metadata
         """
         # Step 1: Generate query embedding
-        embedding_model = get_embedding_model()
+        embedding_model = get_embedding_model(api_key=embedding_api_key)
         query_embedding = embedding_model.embed(question)
         
         # Step 2: Retrieve relevant documents
@@ -98,7 +101,7 @@ Question: {question}
 Answer:"""
         
         # Step 5: Generate answer using LLM
-        llm_client = get_llm_client()
+        llm_client = get_llm_client(provider=llm_provider, api_key=llm_api_key)
         response = llm_client.ask(
             prompt=prompt,
             temperature=temperature,
@@ -128,10 +131,13 @@ Answer:"""
         temperature: float = 0.7,
         max_tokens: Optional[int] = None,
         filter: Optional[Dict[str, Any]] = None,
+        llm_provider: Optional[str] = None,
+        llm_api_key: Optional[str] = None,
+        embedding_api_key: Optional[str] = None,
     ) -> dict:
         """Async version of query()."""
         # Step 1: Generate query embedding
-        embedding_model = get_embedding_model()
+        embedding_model = get_embedding_model(api_key=embedding_api_key)
         query_embedding = await embedding_model.embed_async(question)
         
         # Step 2: Retrieve relevant documents
@@ -179,7 +185,7 @@ Question: {question}
 Answer:"""
         
         # Step 5: Generate answer
-        llm_client = get_llm_client()
+        llm_client = get_llm_client(provider=llm_provider, api_key=llm_api_key)
         response = await llm_client.ask_async(
             prompt=prompt,
             temperature=temperature,

@@ -16,7 +16,8 @@ _embedding_model: Optional[BaseEmbeddingModel] = None
 
 def get_embedding_model(
     provider: str = "openai",
-    model_name: Optional[str] = None
+    model_name: Optional[str] = None,
+    api_key: Optional[str] = None,
 ) -> BaseEmbeddingModel:
     """
     Get or create embedding model instance (singleton pattern).
@@ -34,7 +35,8 @@ def get_embedding_model(
     global _embedding_model
     
     if provider == "openai":
-        if not OPENAI_API_KEY:
+        resolved_key = api_key or OPENAI_API_KEY
+        if not resolved_key:
             raise ConfigurationError(
                 "OPENAI_API_KEY not found in environment variables",
                 details={"provider": "openai"}
@@ -42,16 +44,21 @@ def get_embedding_model(
         
         model = model_name or "text-embedding-3-small"
         
-        # Return existing if same provider and model
-        if _embedding_model and isinstance(_embedding_model, OpenAIEmbeddings):
-            if _embedding_model.model_name == model:
-                return _embedding_model
-        
-        _embedding_model = OpenAIEmbeddings(api_key=OPENAI_API_KEY, model_name=model)
-        logger.info(
-            "Initialized OpenAI embeddings",
-            extra={"provider": "openai", "model": model, "dimension": _embedding_model.get_dimension()}
-        )
+        # Return cached instance only when using env key
+        if not api_key:
+            if _embedding_model and isinstance(_embedding_model, OpenAIEmbeddings):
+                if _embedding_model.model_name == model:
+                    return _embedding_model
+
+            _embedding_model = OpenAIEmbeddings(api_key=resolved_key, model_name=model)
+            logger.info(
+                "Initialized OpenAI embeddings",
+                extra={"provider": "openai", "model": model, "dimension": _embedding_model.get_dimension()}
+            )
+            return _embedding_model
+
+        # Per-request override: do not cache
+        return OpenAIEmbeddings(api_key=resolved_key, model_name=model)
         
     else:
         raise ConfigurationError(

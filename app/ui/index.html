@@ -1,0 +1,503 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AI RAG Service UI</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #0f1115;
+        --panel: #151a21;
+        --border: #2a3340;
+        --text: #e6e8ee;
+        --muted: #a7b0bf;
+        --accent: #6aa8ff;
+        --danger: #ff6a6a;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+      }
+
+      .layout {
+        display: flex;
+        height: 100vh;
+        overflow: hidden;
+      }
+
+      .panel {
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .chat-panel {
+        flex: 1;
+        border-right: 1px solid var(--border);
+        min-width: 0;
+      }
+
+      .sidebar {
+        width: 360px;
+        background: var(--panel);
+      }
+
+      h1, h2 {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 600;
+      }
+
+      .muted {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .row {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+
+      input[type="text"], input[type="password"], textarea, select {
+        width: 100%;
+        background: #0f141b;
+        color: var(--text);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 10px 12px;
+        font-size: 14px;
+      }
+
+      textarea {
+        min-height: 90px;
+        resize: vertical;
+      }
+
+      button {
+        background: var(--accent);
+        border: none;
+        color: #08121f;
+        font-weight: 600;
+        border-radius: 8px;
+        padding: 10px 14px;
+        cursor: pointer;
+      }
+
+      button.secondary {
+        background: transparent;
+        border: 1px solid var(--border);
+        color: var(--text);
+      }
+
+      button:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+
+      .messages {
+        flex: 1;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        padding-right: 4px;
+      }
+
+      .message {
+        padding: 12px;
+        border-radius: 10px;
+        background: #121824;
+        border: 1px solid var(--border);
+        white-space: pre-wrap;
+      }
+
+      .message.user {
+        background: #0e1b2a;
+        border-color: #1f2d3f;
+      }
+
+      .message .label {
+        font-size: 12px;
+        color: var(--muted);
+        margin-bottom: 6px;
+      }
+
+      .status {
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      .error {
+        color: var(--danger);
+        font-size: 12px;
+      }
+
+      .list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .list-item {
+        padding: 10px;
+        border-radius: 8px;
+        border: 1px solid var(--border);
+        background: #121722;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .list-item a {
+        color: var(--accent);
+        text-decoration: none;
+        word-break: break-word;
+      }
+
+      .pill {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 12px;
+        background: #222a36;
+        color: var(--muted);
+        font-size: 11px;
+      }
+    </style>
+  </head>
+  <body data-debug="{{DEBUG}}">
+    <div class="layout">
+      <section class="panel chat-panel">
+        <h1>Prompt</h1>
+        <div class="row" id="serviceKeyRow">
+          <input id="apiKey" type="password" placeholder="Service API key (X-API-Key)" />
+        </div>
+        <div class="row">
+          <select id="llmProvider" aria-label="LLM provider">
+            <option value="anthropic">Anthropic</option>
+            <option value="openai">OpenAI</option>
+          </select>
+          <input id="providerKey" type="password" placeholder="Provider API key" />
+          <button id="saveKey" class="secondary">Save</button>
+        </div>
+        <div class="muted">Service key secures this API. Provider key is for the selected LLM.</div>
+        <div class="muted">RAG queries call `/rag/query`. Sources appear on the right.</div>
+        <div id="messages" class="messages"></div>
+        <div class="row">
+          <textarea id="prompt" placeholder="Ask a question"></textarea>
+        </div>
+        <div class="row">
+          <button id="send">Send</button>
+          <div id="status" class="status"></div>
+        </div>
+      </section>
+      <aside class="panel sidebar">
+        <h2>SEC sources</h2>
+        <div class="muted">Direct links to filings used by the last answer.</div>
+        <div id="sources" class="list"></div>
+        <hr style="border-color: var(--border); width: 100%;" />
+        <h2>Add specific file</h2>
+        <div class="row">
+          <input id="searchQuery" type="text" placeholder="Enter file name or id" />
+          <button id="searchBtn" class="secondary">Search</button>
+        </div>
+        <div id="searchError" class="error"></div>
+        <div id="searchResults" class="list"></div>
+      </aside>
+    </div>
+
+    <script>
+      const apiKeyInput = document.getElementById("apiKey");
+      const llmProviderSelect = document.getElementById("llmProvider");
+      const providerKeyInput = document.getElementById("providerKey");
+      const saveKeyButton = document.getElementById("saveKey");
+      const promptInput = document.getElementById("prompt");
+      const sendButton = document.getElementById("send");
+      const messagesEl = document.getElementById("messages");
+      const statusEl = document.getElementById("status");
+      const serviceKeyRow = document.getElementById("serviceKeyRow");
+      const sourcesEl = document.getElementById("sources");
+      const searchQueryInput = document.getElementById("searchQuery");
+      const searchBtn = document.getElementById("searchBtn");
+      const searchErrorEl = document.getElementById("searchError");
+      const searchResultsEl = document.getElementById("searchResults");
+
+      const sourceMap = new Map();
+
+      function getProviderStorageKey(provider) {
+        return provider === "openai" ? "openaiKey" : "anthropicKey";
+      }
+
+      function loadApiKey() {
+        const isDebug = document.body.dataset.debug === "true";
+        if (serviceKeyRow) {
+          serviceKeyRow.style.display = isDebug ? "none" : "flex";
+        }
+        const stored = localStorage.getItem("apiKey");
+        if (stored) {
+          apiKeyInput.value = stored;
+        }
+        const preferred = localStorage.getItem("llmProvider");
+        if (preferred) {
+          llmProviderSelect.value = preferred;
+        }
+        const providerKey = localStorage.getItem(getProviderStorageKey(llmProviderSelect.value));
+        if (providerKey) {
+          providerKeyInput.value = providerKey;
+        }
+      }
+
+      function saveApiKey() {
+        const key = apiKeyInput.value.trim();
+        if (key) {
+          localStorage.setItem("apiKey", key);
+        } else {
+          localStorage.removeItem("apiKey");
+        }
+        const provider = llmProviderSelect.value;
+        const providerKey = providerKeyInput.value.trim();
+        localStorage.setItem("llmProvider", provider);
+        if (providerKey) {
+          localStorage.setItem(getProviderStorageKey(provider), providerKey);
+        } else {
+          localStorage.removeItem(getProviderStorageKey(provider));
+        }
+        statusEl.textContent = (key || providerKey) ? "Keys saved." : "Keys cleared.";
+        setTimeout(() => (statusEl.textContent = ""), 2000);
+      }
+
+      function addMessage(label, text, className) {
+        const wrapper = document.createElement("div");
+        wrapper.className = `message ${className || ""}`.trim();
+        const labelEl = document.createElement("div");
+        labelEl.className = "label";
+        labelEl.textContent = label;
+        const textEl = document.createElement("div");
+        textEl.textContent = text;
+        wrapper.appendChild(labelEl);
+        wrapper.appendChild(textEl);
+        messagesEl.appendChild(wrapper);
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+      }
+
+      function normalizeCik(cik) {
+        if (!cik) return null;
+        const parsed = parseInt(String(cik), 10);
+        return Number.isNaN(parsed) ? null : parsed;
+      }
+
+      function buildFilingUrl(cik, accession) {
+        const cikInt = normalizeCik(cik);
+        if (!cikInt || !accession) return null;
+        const noDash = String(accession).replace(/-/g, "");
+        return `https://www.sec.gov/Archives/edgar/data/${cikInt}/${noDash}/${accession}-index.html`;
+      }
+
+      function renderSources() {
+        sourcesEl.innerHTML = "";
+        if (sourceMap.size === 0) {
+          const empty = document.createElement("div");
+          empty.className = "muted";
+          empty.textContent = "No sources yet.";
+          sourcesEl.appendChild(empty);
+          return;
+        }
+        for (const item of sourceMap.values()) {
+          const div = document.createElement("div");
+          div.className = "list-item";
+          const title = document.createElement("div");
+          title.textContent = item.title;
+          const link = document.createElement("a");
+          link.href = item.url;
+          link.target = "_blank";
+          link.rel = "noreferrer";
+          link.textContent = item.url;
+          const meta = document.createElement("div");
+          meta.className = "pill";
+          meta.textContent = item.meta;
+          div.appendChild(title);
+          div.appendChild(link);
+          div.appendChild(meta);
+          sourcesEl.appendChild(div);
+        }
+      }
+
+      function upsertSource(entry) {
+        if (!entry.key || !entry.url) return;
+        sourceMap.set(entry.key, entry);
+        renderSources();
+      }
+
+      function onProviderChange() {
+        const provider = llmProviderSelect.value;
+        localStorage.setItem("llmProvider", provider);
+        providerKeyInput.value = localStorage.getItem(getProviderStorageKey(provider)) || "";
+      }
+
+      async function fetchJSON(path, options) {
+        const headers = {
+          "Content-Type": "application/json",
+          ...(options && options.headers ? options.headers : {}),
+        };
+        const apiKey = apiKeyInput.value.trim();
+        const provider = llmProviderSelect.value;
+        const providerKey = providerKeyInput.value.trim();
+        if (apiKey) {
+          headers["X-API-Key"] = apiKey;
+        }
+        headers["X-LLM-Provider"] = provider;
+        if (providerKey) {
+          if (provider === "openai") {
+            headers["X-OpenAI-Key"] = providerKey;
+          } else {
+            headers["X-Anthropic-Key"] = providerKey;
+          }
+        }
+        const response = await fetch(path, { ...options, headers });
+        const json = await response.json();
+        if (!response.ok) {
+          throw new Error(json?.error?.message || response.statusText);
+        }
+        return json;
+      }
+
+      async function sendPrompt() {
+        const question = promptInput.value.trim();
+        if (!question) return;
+        addMessage("You", question, "user");
+        promptInput.value = "";
+        statusEl.textContent = "Thinking...";
+        sendButton.disabled = true;
+        try {
+          const payload = { question };
+          const result = await fetchJSON("/rag/query", {
+            method: "POST",
+            body: JSON.stringify(payload),
+          });
+          if (!result.success) {
+            throw new Error(result?.error?.message || "Request failed");
+          }
+          addMessage("Answer", result.data.answer || "No response.", "assistant");
+          sourceMap.clear();
+          const sources = result.data.sources || [];
+          for (const source of sources) {
+            const meta = source.metadata || {};
+            const accession = meta.accession_number;
+            const cik = meta.cik;
+            const url = buildFilingUrl(cik, accession);
+            const key = `${cik || "unknown"}:${accession || Math.random()}`;
+            if (!url) continue;
+            upsertSource({
+              key,
+              url,
+              title: `${accession || "Unknown filing"}`,
+              meta: `${meta.form_type || "SEC filing"}${meta.filed_date ? " • " + meta.filed_date : ""}`,
+            });
+          }
+        } catch (err) {
+          addMessage("Error", err.message, "assistant");
+        } finally {
+          statusEl.textContent = "";
+          sendButton.disabled = false;
+        }
+      }
+
+      async function searchFilings() {
+        const query = searchQueryInput.value.trim();
+        if (!query) return;
+        searchErrorEl.textContent = "";
+        searchResultsEl.innerHTML = "";
+        try {
+          const payload = { query, start: 0, count: 10 };
+          const result = await fetchJSON("/sec/search", {
+            method: "POST",
+            body: JSON.stringify(payload),
+          });
+          if (!result.success) {
+            throw new Error(result?.error?.message || "Search failed");
+          }
+          const results = result.data.results || [];
+          if (results.length === 0) {
+            const empty = document.createElement("div");
+            empty.className = "muted";
+            empty.textContent = "No results.";
+            searchResultsEl.appendChild(empty);
+            return;
+          }
+          for (const item of results) {
+            const entry = document.createElement("div");
+            entry.className = "list-item";
+            const title = document.createElement("div");
+            title.textContent = `${item.company_name || "Company"} • ${item.form_type || "Form"} (${item.filed_date || "unknown"})`;
+            const link = document.createElement("a");
+            link.href = item.filing_url || buildFilingUrl(item.cik, item.accession_number) || "#";
+            link.target = "_blank";
+            link.rel = "noreferrer";
+            link.textContent = link.href;
+            const addBtn = document.createElement("button");
+            addBtn.textContent = "Add";
+            addBtn.className = "secondary";
+            addBtn.addEventListener("click", async () => {
+              addBtn.disabled = true;
+              addBtn.textContent = "Adding...";
+              try {
+                await fetchJSON("/sec/ingest", {
+                  method: "POST",
+                  body: JSON.stringify({
+                    cik: item.cik,
+                    accession_number: item.accession_number,
+                    form_type: item.form_type,
+                    filed_date: item.filed_date,
+                    company_name: item.company_name,
+                    filing_url: item.filing_url,
+                  }),
+                });
+                const url = item.filing_url || buildFilingUrl(item.cik, item.accession_number);
+                upsertSource({
+                  key: `${item.cik}:${item.accession_number}`,
+                  url,
+                  title: item.accession_number,
+                  meta: `${item.form_type || "SEC filing"}${item.filed_date ? " • " + item.filed_date : ""}`,
+                });
+                addBtn.textContent = "Added";
+              } catch (err) {
+                addBtn.textContent = "Failed";
+                searchErrorEl.textContent = err.message;
+              } finally {
+                addBtn.disabled = false;
+              }
+            });
+            entry.appendChild(title);
+            entry.appendChild(link);
+            entry.appendChild(addBtn);
+            searchResultsEl.appendChild(entry);
+          }
+        } catch (err) {
+          searchErrorEl.textContent = err.message;
+        }
+      }
+
+      saveKeyButton.addEventListener("click", saveApiKey);
+      llmProviderSelect.addEventListener("change", onProviderChange);
+      sendButton.addEventListener("click", sendPrompt);
+      searchBtn.addEventListener("click", searchFilings);
+      promptInput.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+          sendPrompt();
+        }
+      });
+
+      loadApiKey();
+      renderSources();
+    </script>
+  </body>
+</html>

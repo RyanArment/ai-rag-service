@@ -2,10 +2,11 @@
 FastAPI application entry point.
 """
 import uuid
+from pathlib import Path
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, HTMLResponse
 
 from app.core.config import (
     APP_NAME,
@@ -51,6 +52,8 @@ app = FastAPI(
     debug=DEBUG,
     lifespan=lifespan,
 )
+
+UI_INDEX_PATH = Path(__file__).resolve().parent / "ui" / "index.html"
 
 # CORS middleware
 app.add_middleware(
@@ -168,3 +171,13 @@ async def root():
         "version": APP_VERSION,
         "docs": "/docs",
     }
+
+
+@app.get("/ui", include_in_schema=False)
+async def ui():
+    """Minimal UI for prompt and SEC sources."""
+    if not UI_INDEX_PATH.exists():
+        raise HTTPException(status_code=404, detail="UI not found")
+    html = UI_INDEX_PATH.read_text(encoding="utf-8")
+    html = html.replace("{{DEBUG}}", "true" if DEBUG else "false")
+    return HTMLResponse(html)
