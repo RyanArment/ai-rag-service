@@ -48,6 +48,7 @@ build/
 *.sqlite3
 chroma_db/
 postgres_data/
+sec_cache/
 
 # Temporary files
 /tmp/

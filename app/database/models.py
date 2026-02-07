@@ -3,7 +3,7 @@ SQLAlchemy database models for production-ready RAG service.
 """
 from datetime import datetime
 from uuid import uuid4
-from sqlalchemy import Column, String, Integer, Float, Text, DateTime, ForeignKey, Boolean
+from sqlalchemy import Column, String, Integer, Float, Text, DateTime, Date, ForeignKey, Boolean
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
@@ -60,6 +60,12 @@ class DocumentChunk(Base):
     content_preview = Column(Text)  # First 200 chars for preview
     embedding = Column(Vector(1536))  # pgvector: 1536 dimensions for OpenAI embeddings
     chunk_metadata = Column(Text)  # JSON metadata as text (renamed from 'metadata' to avoid SQLAlchemy conflict)
+    source_type = Column(String(50), default="document", index=True)  # document, sec_filing
+    form_type = Column(String(20), index=True)
+    cik = Column(String(10), index=True)
+    accession_number = Column(String(25), index=True)
+    filed_date = Column(Date, index=True)
+    filing_section = Column(String(100))
     created_at = Column(DateTime, default=datetime.utcnow)
     
     # Relationships
@@ -102,3 +108,52 @@ class APIKey(Base):
     
     # Relationships
     user = relationship("User", back_populates="api_keys")
+
+
+class SECCompany(Base):
+    """SEC company metadata."""
+    __tablename__ = "sec_companies"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    cik = Column(String(10), unique=True, nullable=False, index=True)
+    company_name = Column(String(255))
+    ticker = Column(String(20))
+    sic_code = Column(String(10))
+    state_of_incorporation = Column(String(50))
+    last_synced_at = Column(DateTime)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    filings = relationship("SECFiling", back_populates="company", cascade="all, delete-orphan")
+
+
+class SECFiling(Base):
+    """SEC filing metadata."""
+    __tablename__ = "sec_filings"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    accession_number = Column(String(25), unique=True, nullable=False, index=True)
+    company_id = Column(UUID(as_uuid=True), ForeignKey("sec_companies.id"), nullable=False, index=True)
+    form_type = Column(String(20), nullable=False, index=True)
+    filed_date = Column(Date, nullable=False, index=True)
+    accepted_date = Column(DateTime)
+    filing_url = Column(Text, nullable=False)
+    document_id = Column(UUID(as_uuid=True), ForeignKey("documents.id"), nullable=True, index=True)
+    status = Column(String(20), default="discovered")  # discovered, downloading, indexing, indexed, failed
+    metadata = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    company = relationship("SECCompany", back_populates="filings")
+    document = relationship("Document")
+
+
+class FilingCrossReference(Base):
+    """Cross-references between filings."""
+    __tablename__ = "filing_cross_references"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    source_filing_id = Column(UUID(as_uuid=True), ForeignKey("sec_filings.id"), nullable=False, index=True)
+    target_accession_number = Column(String(25), nullable=False, index=True)
+    target_filing_id = Column(UUID(as_uuid=True), ForeignKey("sec_filings.id"), nullable=True, index=True)
+    reference_context = Column(Text)
+    resolved = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)

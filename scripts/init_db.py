@@ -21,3 +21,6 @@ if __name__ == "__main__":
     print("  - document_chunks")
     print("  - queries")
     print("  - api_keys")
+    print("  - sec_companies")
+    print("  - sec_filings")
+    print("  - filing_cross_references")

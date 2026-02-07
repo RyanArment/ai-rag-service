@@ -10,7 +10,7 @@ from fastapi.responses import JSONResponse
 from app.core.config import APP_NAME, APP_VERSION, DEBUG, LOG_LEVEL, LOG_JSON
 from app.core.logging_config import setup_logging, get_logger
 from app.core.exceptions import RAGServiceError
-from app.routes import ask_router, documents_router, rag_router
+from app.routes import ask_router, documents_router, rag_router, sec_router
 
 # Setup logging first
 setup_logging(log_level=LOG_LEVEL, json_output=LOG_JSON)
@@ -110,6 +110,7 @@ async def general_exception_handler(request: Request, exc: Exception):
 app.include_router(ask_router.router)
 app.include_router(documents_router.router)
 app.include_router(rag_router.router)
+app.include_router(sec_router.router)
 
 
 # Health check endpoint

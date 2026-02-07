@@ -2,7 +2,8 @@
 RAG query endpoints.
 """
 import time
-from typing import Optional
+from typing import Optional, Dict, Any
+from datetime import date
 from fastapi import APIRouter, Request, Depends
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -28,6 +29,11 @@ class RAGQueryRequest(BaseModel):
     temperature: float = Field(0.7, ge=0.0, le=2.0, description="Sampling temperature")
     max_tokens: Optional[int] = Field(None, gt=0, le=100000, description="Maximum tokens to generate")
     top_k: Optional[int] = Field(5, gt=0, le=20, description="Number of documents to retrieve")
+    form_type: Optional[str] = Field(None, max_length=20, description="SEC form type filter")
+    cik: Optional[str] = Field(None, max_length=10, description="CIK filter")
+    accession_number: Optional[str] = Field(None, max_length=25, description="Accession number filter")
+    filed_date_from: Optional[date] = Field(None, description="Filed date start (YYYY-MM-DD)")
+    filed_date_to: Optional[date] = Field(None, description="Filed date end (YYYY-MM-DD)")
 
 
 @router.post("/query", response_model=APIResponse)
@@ -61,11 +67,26 @@ async def rag_query(
             rag_pipeline.top_k = request.top_k
         
         # Execute RAG pipeline
+        filter: Dict[str, Any] = {}
+        if request.form_type:
+            filter["form_type"] = request.form_type
+        if request.cik:
+            filter["cik"] = request.cik
+        if request.accession_number:
+            filter["accession_number"] = request.accession_number
+        if request.filed_date_from:
+            filter["filed_date_from"] = request.filed_date_from
+        if request.filed_date_to:
+            filter["filed_date_to"] = request.filed_date_to
+        if filter:
+            filter["source_type"] = "sec_filing"
+
         result = await rag_pipeline.query_async(
             question=request.question,
             system_prompt=request.system_prompt,
             temperature=request.temperature,
             max_tokens=request.max_tokens,
+            filter=filter if filter else None,
         )
         
         latency_ms = (time.time() - start_time) * 1000

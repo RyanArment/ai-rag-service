@@ -45,6 +45,19 @@ class PgVectorStore(BaseVectorStore):
                 doc_uuid = UUID(document_id)
                 
                 # Create chunk record
+                filed_date = None
+                if doc.metadata:
+                    filed_date_value = doc.metadata.get("filed_date")
+                    if filed_date_value:
+                        try:
+                            if hasattr(filed_date_value, "date"):
+                                filed_date = filed_date_value
+                            else:
+                                from datetime import datetime
+                                filed_date = datetime.fromisoformat(str(filed_date_value)).date()
+                        except Exception:
+                            filed_date = None
+
                 chunk = DocumentChunkModel(
                     id=UUID(doc.id) if self._is_uuid(doc.id) else None,
                     document_id=doc_uuid,
@@ -53,6 +66,12 @@ class PgVectorStore(BaseVectorStore):
                     content_preview=doc.content[:200] if doc.content else None,
                     embedding=doc.embedding,
                     chunk_metadata=json.dumps(doc.metadata) if doc.metadata else None,
+                    source_type=doc.metadata.get("source_type") if doc.metadata else None,
+                    form_type=doc.metadata.get("form_type") if doc.metadata else None,
+                    cik=doc.metadata.get("cik") if doc.metadata else None,
+                    accession_number=doc.metadata.get("accession_number") if doc.metadata else None,
+                    filed_date=filed_date,
+                    filing_section=doc.metadata.get("filing_section") if doc.metadata else None,
                 )
                 
                 self.db.add(chunk)
@@ -88,6 +107,18 @@ class PgVectorStore(BaseVectorStore):
                 if 'document_id' in filter:
                     from uuid import UUID
                     query = query.filter(DocumentChunkModel.document_id == UUID(filter['document_id']))
+                if 'source_type' in filter:
+                    query = query.filter(DocumentChunkModel.source_type == filter['source_type'])
+                if 'form_type' in filter:
+                    query = query.filter(DocumentChunkModel.form_type == filter['form_type'])
+                if 'cik' in filter:
+                    query = query.filter(DocumentChunkModel.cik == filter['cik'])
+                if 'accession_number' in filter:
+                    query = query.filter(DocumentChunkModel.accession_number == filter['accession_number'])
+                if 'filed_date_from' in filter:
+                    query = query.filter(DocumentChunkModel.filed_date >= filter['filed_date_from'])
+                if 'filed_date_to' in filter:
+                    query = query.filter(DocumentChunkModel.filed_date <= filter['filed_date_to'])
             
             # Order by distance and limit
             results = query.order_by('distance').limit(top_k).all()

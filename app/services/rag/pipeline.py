@@ -1,7 +1,7 @@
 """
 RAG Pipeline: Retrieval-Augmented Generation.
 """
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from app.services.embeddings.embedding_router import get_embedding_model
 from app.services.vector_store.vector_store_router import get_vector_store
 from app.services.llm_router import get_llm_client
@@ -35,6 +35,7 @@ class RAGPipeline:
         system_prompt: Optional[str] = None,
         temperature: float = 0.7,
         max_tokens: Optional[int] = None,
+        filter: Optional[Dict[str, Any]] = None,
     ) -> dict:
         """
         Execute RAG query: retrieve context and generate answer.
@@ -57,6 +58,7 @@ class RAGPipeline:
         search_results = vector_store.search(
             query_embedding=query_embedding,
             top_k=self.top_k,
+            filter=filter,
         )
         
         # Step 3: Build context from retrieved documents
@@ -125,6 +127,7 @@ Answer:"""
         system_prompt: Optional[str] = None,
         temperature: float = 0.7,
         max_tokens: Optional[int] = None,
+        filter: Optional[Dict[str, Any]] = None,
     ) -> dict:
         """Async version of query()."""
         # Step 1: Generate query embedding
@@ -136,6 +139,7 @@ Answer:"""
         search_results = vector_store.search(
             query_embedding=query_embedding,
             top_k=self.top_k,
+            filter=filter,
         )
         
         # Step 3: Build context

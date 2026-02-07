@@ -32,3 +32,11 @@ DATABASE_URL = os.getenv(
 # Vector Store Configuration
 VECTOR_STORE_PROVIDER = os.getenv("VECTOR_STORE_PROVIDER", "pgvector")  # pgvector or chroma
 CHROMA_PERSIST_DIR = os.getenv("CHROMA_PERSIST_DIR", "./chroma_db")
+
+# SEC EDGAR Configuration
+SEC_USER_AGENT = os.getenv(
+    "SEC_USER_AGENT",
+    "ai-rag-service (contact: dev@example.com)"
+)
+SEC_RATE_LIMIT_PER_SEC = float(os.getenv("SEC_RATE_LIMIT_PER_SEC", "8"))
+SEC_CACHE_DIR = os.getenv("SEC_CACHE_DIR", "./sec_cache")
