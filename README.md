@@ -1,183 +1,130 @@
 # AI RAG Service
 
-A production-ready AI RAG (Retrieval-Augmented Generation) backend built with FastAPI, supporting multiple LLM providers (OpenAI + Anthropic) with proper logging, error handling, streaming, and evaluation.
+Backend service for RAG, document ingestion, and SEC EDGAR workflows. Built on FastAPI with LLM/embedding providers, PostgreSQL + pgvector (or Chroma), and API-key protection.
 
-## Features
+## What this service does
 
-- ✅ **Multi-Provider LLM Support**: OpenAI and Anthropic with unified interface
-- ✅ **Streaming Responses**: Server-Sent Events (SSE) for real-time generation
-- ✅ **Structured Logging**: JSON logs for production, readable logs for development
-- ✅ **Error Handling**: Comprehensive error handling with proper HTTP status codes
-- ✅ **Request Tracing**: Request IDs for debugging and monitoring
-- ✅ **Evaluation Framework**: Extensible evaluation system for testing RAG quality
-- ✅ **Type Safety**: Full Pydantic validation and type hints
-- ✅ **Async Support**: Full async/await support for scalability
+- RAG queries with source retrieval and query logging
+- Document upload → chunking → embeddings → vector storage
+- SEC EDGAR search, ingestion, and queued background processing
+- LLM completions with optional streaming responses
+- Optional evaluation framework for RAG quality checks
 
-## Quick Start
+## Quick start
 
-### 1. Create Virtual Environment (Recommended)
+### 1. Create a virtual environment
 
 ```bash
 python3 -m venv venv
-source venv/bin/activate  # On macOS/Linux
-# or: venv\Scripts\activate  # On Windows
+source venv/bin/activate  # macOS/Linux
+# or: venv\Scripts\activate  # Windows
 ```
 
-### 2. Install Dependencies
+### 2. Install dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 3. Configure Environment
+### 3. Configure environment
 
 Create a `.env` file:
 
 ```bash
-# LLM Configuration
-LLM_PROVIDER=anthropic  # or "openai"
-ANTHROPIC_API_KEY=your_anthropic_key
-OPENAI_API_KEY=your_openai_key  # Optional, only needed if using OpenAI
-
-# Logging
-LOG_LEVEL=INFO
-LOG_JSON=false
-
-# Application
+# Core
 APP_NAME=ai-rag-service
 APP_VERSION=0.1.0
-DEBUG=false
+DEBUG=true
+
+# Database (required when DEBUG=false)
+DATABASE_URL=postgresql+psycopg2://user:pass@localhost:5432/ai_rag
+
+# API access
+API_KEY=change-me
+API_KEY_HASH_PEPPER=optional-pepper
+
+# LLMs
+LLM_PROVIDER=anthropic  # or "openai"
+ANTHROPIC_API_KEY=your_anthropic_key
+OPENAI_API_KEY=your_openai_key
+
+# Vector store
+VECTOR_STORE_PROVIDER=pgvector  # or "chroma"
+CHROMA_PERSIST_DIR=./chroma_db
+
+# SEC EDGAR
+SEC_USER_AGENT=ai-rag-service (contact: you@example.com)
+SEC_RATE_LIMIT_PER_SEC=8
+SEC_CACHE_DIR=./sec_cache
+SEC_WORKER_POLL_SECONDS=3
 ```
 
-### 4. Run the Server
+### 4. Initialize the database
 
-**Important:** Make sure your virtual environment is activated:
 ```bash
-source venv/bin/activate  # macOS/Linux
+python scripts/init_db.py
 ```
+
+### 5. Run the API
 
 ```bash
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-### 5. Test the API
-
-Visit http://localhost:8000/docs for interactive API documentation.
-
-Or test with curl:
+### 6. (Optional) Run the SEC ingestion worker
 
 ```bash
-# Non-streaming
-curl -X POST "http://localhost:8000/ask" \
+python scripts/sec_worker.py
+```
+
+Visit `http://localhost:8000/docs` for interactive API docs.
+
+## API highlights
+
+All endpoints (except `/` and `/health`) require `X-API-Key` unless `DEBUG=true` and `API_KEY` is unset.
+
+- `POST /ask` - LLM completion
+- `POST /ask/stream` - streaming completion (SSE)
+- `POST /documents/upload` - upload and index a document
+- `GET /documents/count` - document/chunk counts
+- `GET /documents/list` - list documents
+- `DELETE /documents/{document_id}` - delete a document and its chunks
+- `POST /rag/query` - RAG query with optional SEC filters
+- `POST /sec/search` - search EDGAR filings
+- `POST /sec/ingest` - ingest a filing immediately
+- `POST /sec/ingest/queue` - enqueue a filing for background ingest
+- `POST /sec/ingest/queue/process-next` - process one queued job
+- `GET /sec/ingest/jobs` - list ingest jobs
+- `GET /sec/ingest/jobs/{job_id}` - get a job
+- `GET /sec/filings` - list indexed filings
+- `POST /sec/research` - research question against filings
+- `POST /sec/compare` - compare two filings
+
+Example request:
+
+```bash
+curl -X POST "http://localhost:8000/rag/query" \
   -H "Content-Type: application/json" \
-  -d '{"prompt": "What is Python?"}'
-
-# Streaming
-curl -X POST "http://localhost:8000/ask/stream" \
-  -H "Content-Type: application/json" \
-  -d '{"prompt": "Tell me a short story", "stream": true}'
+  -H "X-API-Key: $API_KEY" \
+  -d '{
+    "question": "Summarize the risk factors for Apple",
+    "form_type": "10-K",
+    "top_k": 5
+  }'
 ```
 
-## Project Structure
+## Vector store setup
 
-```
-app/
-├── main.py                    # FastAPI app entry point
-├── core/
-│   ├── config.py             # Configuration & env vars
-│   ├── exceptions.py          # Custom exceptions
-│   ├── logging_config.py      # Logging setup
-│   └── responses.py           # Unified response schemas
-├── routes/
-│   ├── __init__.py
-│   └── ask_router.py          # LLM completion endpoints
-├── services/
-│   ├── llm/
-│   │   ├── base.py            # Base LLM interface
-│   │   ├── openai_client.py   # OpenAI implementation
-│   │   └── anthropic_client.py # Anthropic implementation
-│   ├── llm_router.py          # LLM client factory
-│   └── evaluation/
-│       ├── base.py            # Evaluation base classes
-│       ├── metrics.py         # Concrete metrics
-│       └── evaluator.py       # Evaluation orchestrator
+The default vector store is `pgvector`. Ensure the Postgres extension is installed:
+
+```bash
+./install_pgvector.sh
 ```
 
-## API Endpoints
+To use Chroma instead, set `VECTOR_STORE_PROVIDER=chroma` and `CHROMA_PERSIST_DIR`.
 
-### POST `/ask`
-Non-streaming LLM completion.
+## Useful scripts
 
-**Request:**
-```json
-{
-  "prompt": "What is Python?",
-  "system_prompt": "You are a helpful assistant.",
-  "temperature": 0.7,
-  "max_tokens": 1000,
-  "provider": "anthropic"
-}
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "data": {
-    "content": "Python is a programming language...",
-    "model": "claude-3-5-sonnet-20241022",
-    "provider": "anthropic",
-    "usage": {
-      "prompt_tokens": 10,
-      "completion_tokens": 50,
-      "total_tokens": 60
-    },
-    "latency_ms": 1234.5
-  },
-  "request_id": "uuid-here"
-}
-```
-
-### POST `/ask/stream`
-Streaming LLM completion (Server-Sent Events).
-
-**Request:** Same as `/ask`
-
-**Response:** SSE stream of chunks:
-```
-data: {"content": "Python", "done": false, "model": "claude-3-5-sonnet-20241022", "provider": "anthropic"}
-
-data: {"content": " is", "done": false, "model": "claude-3-5-sonnet-20241022", "provider": "anthropic"}
-
-data: {"content": "", "done": true, "model": "claude-3-5-sonnet-20241022", "provider": "anthropic"}
-```
-
-### GET `/health`
-Health check endpoint.
-
-## Evaluation Framework
-
-The evaluation framework allows you to test RAG system quality:
-
-```python
-from app.services.evaluation.evaluator import Evaluator
-from app.services.evaluation.metrics import ExactMatchEvaluator, F1ScoreEvaluator
-
-# Initialize evaluator
-evaluator = Evaluator([
-    ExactMatchEvaluator(),
-    F1ScoreEvaluator(),
-])
-
-# Evaluate batch
-test_set = [
-    {
-        "question": "What is Python?",
-        "expected_answer": "Python is a programming language",
-        "actual_answer": "Python is a high-level programming language",
-    },
-]
-
-report = evaluator.evaluate_batch(test_set, test_set_name="python_qa")
-evaluator.save_report(report, "evaluation_results.json")
-```
+- `scripts/init_db.py` - create all database tables
+- `scripts/reset_db.py` - drop and recreate tables
+- `scripts/sec_worker.py` - background worker for SEC ingestion queue
