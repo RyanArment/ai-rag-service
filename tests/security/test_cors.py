@@ -21,5 +21,5 @@ def test_cors_preflight_blocks_unknown_origin(client):
         },
     )
 
-    assert response.status_code == 200
+    assert response.status_code == 400
     assert "access-control-allow-origin" not in response.headers
