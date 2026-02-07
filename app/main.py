@@ -15,15 +15,23 @@ from app.core.config import (
     LOG_JSON,
     CORS_ORIGINS,
     CORS_ALLOW_CREDENTIALS,
+    RATE_LIMIT_ENABLED,
+    RATE_LIMIT_REQUESTS,
+    RATE_LIMIT_WINDOW_SECONDS,
 )
 from app.core.logging_config import setup_logging, get_logger
 from app.core.exceptions import RAGServiceError
 from app.routes import ask_router, documents_router, rag_router, sec_router
 from app.core.security import require_api_key
+from app.core.rate_limiter import RateLimiter
 
 # Setup logging first
 setup_logging(log_level=LOG_LEVEL, json_output=LOG_JSON)
 logger = get_logger(__name__)
+rate_limiter = RateLimiter(
+    max_requests=RATE_LIMIT_REQUESTS,
+    window_seconds=RATE_LIMIT_WINDOW_SECONDS,
+)
 
 
 @asynccontextmanager
@@ -64,6 +72,24 @@ async def add_request_id(request: Request, call_next):
     response = await call_next(request)
     response.headers["X-Request-ID"] = request_id
     return response
+
+
+@app.middleware("http")
+async def enforce_rate_limit(request: Request, call_next):
+    if RATE_LIMIT_ENABLED and request.url.path not in {"/health", "/"}:
+        api_key = request.headers.get("X-API-Key") or ""
+        client_host = request.client.host if request.client else "unknown"
+        identifier = f"{api_key}:{client_host}" if api_key else client_host
+        if not rate_limiter.allow(identifier):
+            return JSONResponse(
+                status_code=429,
+                content={
+                    "success": False,
+                    "error": {"message": "Rate limit exceeded"},
+                    "request_id": getattr(request.state, "request_id", None),
+                },
+            )
+    return await call_next(request)
 
 
 # Exception handlers
