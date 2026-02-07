@@ -6,7 +6,7 @@ from typing import Optional, List, Dict, Any
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 
-from app.database.models import User, Document, DocumentChunk, Query, APIKey
+from app.database.models import User, Document, DocumentChunk, Query, APIKey, SECIngestionJob
 from app.core.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -193,3 +193,99 @@ class QueryRepository:
         if user_id:
             query = query.filter(Query.user_id == user_id)
         return query.order_by(desc(Query.created_at)).limit(limit).offset(offset).all()
+
+
+class SECIngestionJobRepository:
+    """Repository for SEC ingestion jobs."""
+
+    @staticmethod
+    def create_job(
+        db: Session,
+        cik: str,
+        accession_number: str,
+        form_type: str,
+        filed_date: Optional[str] = None,
+        company_name: Optional[str] = None,
+        filing_url: Optional[str] = None,
+    ) -> SECIngestionJob:
+        """Create a new ingestion job."""
+        from datetime import datetime
+        filed_date_value = None
+        if filed_date:
+            try:
+                filed_date_value = datetime.fromisoformat(filed_date).date()
+            except Exception:
+                filed_date_value = None
+
+        job = SECIngestionJob(
+            id=uuid4(),
+            cik=cik,
+            accession_number=accession_number,
+            form_type=form_type,
+            filed_date=filed_date_value,
+            company_name=company_name,
+            filing_url=filing_url,
+            status="pending",
+        )
+        db.add(job)
+        db.commit()
+        db.refresh(job)
+        return job
+
+    @staticmethod
+    def get_job(db: Session, job_id: UUID) -> Optional[SECIngestionJob]:
+        """Get job by ID."""
+        return db.query(SECIngestionJob).filter(SECIngestionJob.id == job_id).first()
+
+    @staticmethod
+    def list_jobs(
+        db: Session,
+        status: Optional[str] = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> List[SECIngestionJob]:
+        """List jobs."""
+        query = db.query(SECIngestionJob)
+        if status:
+            query = query.filter(SECIngestionJob.status == status)
+        return query.order_by(desc(SECIngestionJob.created_at)).limit(limit).offset(offset).all()
+
+    @staticmethod
+    def claim_next_pending(db: Session) -> Optional[SECIngestionJob]:
+        """Claim the next pending job."""
+        from datetime import datetime
+        job = (
+            db.query(SECIngestionJob)
+            .filter(SECIngestionJob.status == "pending")
+            .order_by(SECIngestionJob.created_at)
+            .first()
+        )
+        if not job:
+            return None
+        job.status = "running"
+        job.attempts = (job.attempts or 0) + 1
+        job.started_at = datetime.utcnow()
+        db.commit()
+        db.refresh(job)
+        return job
+
+    @staticmethod
+    def mark_completed(db: Session, job: SECIngestionJob) -> SECIngestionJob:
+        """Mark job completed."""
+        from datetime import datetime
+        job.status = "completed"
+        job.finished_at = datetime.utcnow()
+        db.commit()
+        db.refresh(job)
+        return job
+
+    @staticmethod
+    def mark_failed(db: Session, job: SECIngestionJob, error_message: str) -> SECIngestionJob:
+        """Mark job failed."""
+        from datetime import datetime
+        job.status = "failed"
+        job.error_message = error_message
+        job.finished_at = datetime.utcnow()
+        db.commit()
+        db.refresh(job)
+        return job

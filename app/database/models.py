@@ -157,3 +157,23 @@ class FilingCrossReference(Base):
     reference_context = Column(Text)
     resolved = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class SECIngestionJob(Base):
+    """Background ingestion job for SEC filings."""
+    __tablename__ = "sec_ingestion_jobs"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    cik = Column(String(10), nullable=False, index=True)
+    accession_number = Column(String(25), nullable=False, index=True)
+    form_type = Column(String(20), nullable=False)
+    filed_date = Column(Date)
+    company_name = Column(String(255))
+    filing_url = Column(Text)
+    status = Column(String(20), default="pending", index=True)  # pending, running, completed, failed
+    error_message = Column(Text)
+    attempts = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    started_at = Column(DateTime)
+    finished_at = Column(DateTime)

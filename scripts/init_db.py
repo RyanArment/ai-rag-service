@@ -24,3 +24,4 @@ if __name__ == "__main__":
     print("  - sec_companies")
     print("  - sec_filings")
     print("  - filing_cross_references")
+    print("  - sec_ingestion_jobs")

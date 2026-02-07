@@ -40,3 +40,4 @@ SEC_USER_AGENT = os.getenv(
 )
 SEC_RATE_LIMIT_PER_SEC = float(os.getenv("SEC_RATE_LIMIT_PER_SEC", "8"))
 SEC_CACHE_DIR = os.getenv("SEC_CACHE_DIR", "./sec_cache")
+SEC_WORKER_POLL_SECONDS = float(os.getenv("SEC_WORKER_POLL_SECONDS", "3"))
