@@ -2,6 +2,7 @@
 SEC EDGAR API client.
 """
 import os
+import re
 import time
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
@@ -34,6 +35,14 @@ class EdgarClient:
             "User-Agent": SEC_USER_AGENT,
             "Accept-Encoding": "gzip, deflate",
         }
+        self._accession_pattern = re.compile(r"^[0-9-]{10,25}$")
+
+    def _sanitize_accession(self, accession_number: str) -> str:
+        if not accession_number or not self._accession_pattern.fullmatch(accession_number):
+            raise ValueError("Invalid accession number format")
+        if any(sep in accession_number for sep in ("/", "\\", "..")):
+            raise ValueError("Invalid accession number format")
+        return accession_number
 
     def _throttle(self) -> None:
         min_interval = 1.0 / self._rate_limit
@@ -109,6 +118,7 @@ class EdgarClient:
 
     async def get_filing_index(self, cik: str, accession_number: str) -> Dict[str, Any]:
         """Get filing index JSON for a given accession number."""
+        accession_number = self._sanitize_accession(accession_number)
         accession_no_nodash = accession_number.replace("-", "")
         cik_str = str(int(cik))
         url = f"https://www.sec.gov/Archives/edgar/data/{cik_str}/{accession_no_nodash}/index.json"
@@ -116,6 +126,7 @@ class EdgarClient:
 
     async def download_primary_filing_html(self, cik: str, accession_number: str) -> str:
         """Download the primary HTML document for a filing."""
+        accession_number = self._sanitize_accession(accession_number)
         cache_path = os.path.join(SEC_CACHE_DIR, f"{accession_number}.html")
         if os.path.exists(cache_path):
             with open(cache_path, "r", encoding="utf-8") as handle:

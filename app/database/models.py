@@ -139,7 +139,7 @@ class SECFiling(Base):
     filing_url = Column(Text, nullable=False)
     document_id = Column(UUID(as_uuid=True), ForeignKey("documents.id"), nullable=True, index=True)
     status = Column(String(20), default="discovered")  # discovered, downloading, indexing, indexed, failed
-    metadata = Column(Text)
+    filing_metadata = Column(Text)
     created_at = Column(DateTime, default=datetime.utcnow)
     
     company = relationship("SECCompany", back_populates="filings")

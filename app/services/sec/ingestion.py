@@ -69,7 +69,7 @@ class SECFilingIngestionService:
             filed_date=datetime.fromisoformat(filed_date).date() if filed_date else datetime.utcnow().date(),
             filing_url=filing_url or "",
             status="downloading",
-            metadata=json.dumps({"source": "edgar"}),
+            filing_metadata=json.dumps({"source": "edgar"}),
         )
         if not existing:
             db.add(filing)

@@ -15,11 +15,30 @@ from app.services.vector_store.base import Document as VectorDocument
 from app.database.database import get_db
 from app.database.repositories import DocumentRepository, DocumentChunkRepository
 from app.core.responses import APIResponse
+from app.core.config import MAX_UPLOAD_SIZE_MB
 from app.core.logging_config import get_logger
 
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/documents", tags=["documents"])
+MAX_UPLOAD_BYTES = MAX_UPLOAD_SIZE_MB * 1024 * 1024
+ALLOWED_EXTENSIONS = {".pdf", ".txt", ".md", ".markdown"}
+
+
+def _validate_upload(filename: str, content_type: Optional[str], content: bytes) -> None:
+    extension = (filename or "").lower()
+    ext = None
+    if "." in extension:
+        ext = extension[extension.rfind("."):]
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(status_code=400, detail="Unsupported file type")
+    if ext == ".pdf" or (content_type and "pdf" in content_type.lower()):
+        if not content.startswith(b"%PDF-"):
+            raise HTTPException(status_code=400, detail="Invalid PDF file")
+    else:
+        # Basic binary check for text/markdown
+        if b"\x00" in content[:1024]:
+            raise HTTPException(status_code=400, detail="Invalid text file")
 
 # Initialize document processor
 document_processor = DocumentProcessor(
@@ -65,8 +84,11 @@ async def upload_document(
     # Create document record in PostgreSQL
     db_document = None
     try:
-        # Read file content
-        content = await file.read()
+        # Read file content with size limit
+        content = await file.read(MAX_UPLOAD_BYTES + 1)
+        if len(content) > MAX_UPLOAD_BYTES:
+            raise HTTPException(status_code=413, detail="File too large")
+        _validate_upload(file.filename, file.content_type, content)
         
         # Parse document
         text_content = parse_document(file_path=file.filename, content=content)

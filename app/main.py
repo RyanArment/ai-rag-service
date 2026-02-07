@@ -3,14 +3,23 @@ FastAPI application entry point.
 """
 import uuid
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.core.config import APP_NAME, APP_VERSION, DEBUG, LOG_LEVEL, LOG_JSON
+from app.core.config import (
+    APP_NAME,
+    APP_VERSION,
+    DEBUG,
+    LOG_LEVEL,
+    LOG_JSON,
+    CORS_ORIGINS,
+    CORS_ALLOW_CREDENTIALS,
+)
 from app.core.logging_config import setup_logging, get_logger
 from app.core.exceptions import RAGServiceError
 from app.routes import ask_router, documents_router, rag_router, sec_router
+from app.core.security import require_api_key
 
 # Setup logging first
 setup_logging(log_level=LOG_LEVEL, json_output=LOG_JSON)
@@ -38,8 +47,8 @@ app = FastAPI(
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure appropriately for production
-    allow_credentials=True,
+    allow_origins=CORS_ORIGINS,
+    allow_credentials=CORS_ALLOW_CREDENTIALS,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -107,10 +116,10 @@ async def general_exception_handler(request: Request, exc: Exception):
 
 
 # Include routers
-app.include_router(ask_router.router)
-app.include_router(documents_router.router)
-app.include_router(rag_router.router)
-app.include_router(sec_router.router)
+app.include_router(ask_router.router, dependencies=[Depends(require_api_key)])
+app.include_router(documents_router.router, dependencies=[Depends(require_api_key)])
+app.include_router(rag_router.router, dependencies=[Depends(require_api_key)])
+app.include_router(sec_router.router, dependencies=[Depends(require_api_key)])
 
 
 # Health check endpoint
