@@ -172,12 +172,31 @@
         color: var(--muted);
         font-size: 11px;
       }
+
+      .badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: #1c2330;
+        color: var(--muted);
+        font-size: 11px;
+        border: 1px solid var(--border);
+      }
+
+      .badge.on {
+        color: #a8f5c6;
+        border-color: #1f6b3a;
+        background: #0f2a1d;
+      }
     </style>
   </head>
   <body data-debug="{{DEBUG}}">
     <div class="layout">
       <section class="panel chat-panel">
-        <h1>Prompt</h1>
+        <div class="row">
+          <h1>Prompt</h1>
+          <span id="debugBadge" class="badge">DEBUG: unknown</span>
+        </div>
         <div class="row" id="serviceKeyRow">
           <input id="apiKey" type="password" placeholder="Service API key (X-API-Key)" />
         </div>
@@ -225,6 +244,7 @@
       const messagesEl = document.getElementById("messages");
       const statusEl = document.getElementById("status");
       const serviceKeyRow = document.getElementById("serviceKeyRow");
+      const debugBadge = document.getElementById("debugBadge");
       const sourcesEl = document.getElementById("sources");
       const searchQueryInput = document.getElementById("searchQuery");
       const searchBtn = document.getElementById("searchBtn");
@@ -241,6 +261,10 @@
         const isDebug = document.body.dataset.debug === "true";
         if (serviceKeyRow) {
           serviceKeyRow.style.display = isDebug ? "none" : "flex";
+        }
+        if (debugBadge) {
+          debugBadge.textContent = isDebug ? "DEBUG: true" : "DEBUG: false";
+          debugBadge.classList.toggle("on", isDebug);
         }
         const stored = localStorage.getItem("apiKey");
         if (stored) {
