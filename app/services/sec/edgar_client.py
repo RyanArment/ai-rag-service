@@ -94,17 +94,31 @@ class EdgarClient:
         hits = data.get("hits", {}).get("hits", [])
         for hit in hits:
             source = hit.get("_source", {}) if isinstance(hit, dict) else {}
-            cik = str(source.get("cik", "")).zfill(10)
-            accession_number = source.get("accessionNo") or source.get("accession_number")
+            ciks = source.get("ciks") or []
+            cik_value = ciks[0] if isinstance(ciks, list) and ciks else source.get("cik")
+            cik = str(cik_value or "").zfill(10)
+            accession_number = source.get("accessionNo") or source.get("accession_number") or source.get("adsh")
+            form_type = source.get("formType") or source.get("form_type") or source.get("form")
+            filed_date = source.get("filedDate") or source.get("filed_date") or source.get("file_date")
+            company_name = None
+            display_names = source.get("display_names") or source.get("companyName") or source.get("company_name")
+            if isinstance(display_names, list) and display_names:
+                company_name = display_names[0]
+            elif isinstance(display_names, str):
+                company_name = display_names
             filing_url = source.get("linkToFilingDetails") or source.get("filingDetail")
+            if not filing_url and cik and accession_number:
+                accession_no_nodash = str(accession_number).replace("-", "")
+                cik_str = str(int(cik)) if cik.isdigit() else cik.lstrip("0")
+                filing_url = f"https://www.sec.gov/Archives/edgar/data/{cik_str}/{accession_no_nodash}/{accession_number}-index.html"
             results.append(
                 FilingSearchResult(
                     cik=cik,
                     accession_number=accession_number or "",
-                    form_type=source.get("formType") or source.get("form_type") or "",
-                    filed_date=source.get("filedDate") or source.get("filed_date"),
+                    form_type=form_type or "",
+                    filed_date=filed_date,
                     filing_url=filing_url,
-                    company_name=source.get("companyName") or source.get("company_name"),
+                    company_name=company_name,
                 )
             )
 
@@ -136,19 +150,46 @@ class EdgarClient:
         items = index_json.get("directory", {}).get("item", [])
 
         candidate = None
+        html_items = []
+        txt_items = []
         for item in items:
             name = item.get("name", "")
-            if name.lower().endswith((".htm", ".html")) and "index" not in name.lower():
-                candidate = name
-                break
+            lower_name = name.lower()
+            if lower_name.endswith((".htm", ".html")):
+                html_items.append(item)
+            elif lower_name.endswith(".txt"):
+                txt_items.append(item)
 
-        if not candidate:
-            raise ValueError("No primary HTML document found in filing index")
+        def sorted_by_size(items_list):
+            return sorted(items_list, key=lambda i: i.get("size", 0), reverse=True)
+
+        # Prefer non-index HTML, then TXT, then any HTML (index pages last)
+        non_index_html = [item for item in html_items if "index" not in item.get("name", "").lower()]
+        candidates = (
+            [item.get("name") for item in sorted_by_size(non_index_html)]
+            + [item.get("name") for item in sorted_by_size(txt_items)]
+            + [item.get("name") for item in sorted_by_size(html_items)]
+        )
+        candidates = [name for name in candidates if name]
+
+        if not candidates:
+            raise ValueError("No primary document found in filing index")
 
         accession_no_nodash = accession_number.replace("-", "")
         cik_str = str(int(cik))
-        url = f"https://www.sec.gov/Archives/edgar/data/{cik_str}/{accession_no_nodash}/{candidate}"
-        html = await self._get_text(url)
+        html = None
+        for candidate in candidates:
+            url = f"https://www.sec.gov/Archives/edgar/data/{cik_str}/{accession_no_nodash}/{candidate}"
+            try:
+                html = await self._get_text(url)
+                break
+            except httpx.HTTPStatusError as exc:
+                if exc.response is not None and exc.response.status_code == 404:
+                    continue
+                raise
+
+        if html is None:
+            raise ValueError("No downloadable primary document found in filing index")
 
         os.makedirs(SEC_CACHE_DIR, exist_ok=True)
         with open(cache_path, "w", encoding="utf-8") as handle:

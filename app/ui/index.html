@@ -216,6 +216,10 @@
         </div>
         <div class="row">
           <button id="send">Send</button>
+          <label class="row" style="gap: 6px;">
+            <input id="autoIngest" type="checkbox" checked />
+            <span class="muted">Auto‑ingest SEC filings</span>
+          </label>
           <div id="status" class="status"></div>
         </div>
       </section>
@@ -241,6 +245,7 @@
       const saveKeyButton = document.getElementById("saveKey");
       const promptInput = document.getElementById("prompt");
       const sendButton = document.getElementById("send");
+      const autoIngestToggle = document.getElementById("autoIngest");
       const messagesEl = document.getElementById("messages");
       const statusEl = document.getElementById("status");
       const serviceKeyRow = document.getElementById("serviceKeyRow");
@@ -252,6 +257,7 @@
       const searchResultsEl = document.getElementById("searchResults");
 
       const sourceMap = new Map();
+      let isSubmitting = false;
 
       function getProviderStorageKey(provider) {
         return provider === "openai" ? "openaiKey" : "anthropicKey";
@@ -394,14 +400,79 @@
         return json;
       }
 
+      function isValidSearchResult(item) {
+        return Boolean(item && item.accession_number && item.form_type && item.cik);
+      }
+
+      function extractFormTypes(text) {
+        const forms = [];
+        const candidates = ["10-K", "10-Q", "8-K", "S-1", "20-F", "6-K"];
+        for (const form of candidates) {
+          if (text.toUpperCase().includes(form)) {
+            forms.push(form);
+          }
+        }
+        return forms.length ? forms : null;
+      }
+
+      async function ingestFromQuestion(question) {
+        statusEl.textContent = "Searching SEC filings...";
+        const formTypes = extractFormTypes(question);
+        const searchPayload = { query: question, start: 0, count: 10 };
+        if (formTypes) {
+          searchPayload.form_types = formTypes;
+        }
+        const searchResult = await fetchJSON("/sec/search", {
+          method: "POST",
+          body: JSON.stringify(searchPayload),
+        });
+        if (!searchResult.success) {
+          throw new Error(searchResult?.error?.message || "SEC search failed");
+        }
+        const results = searchResult.data.results || [];
+        const validResults = results.filter(isValidSearchResult);
+        if (validResults.length === 0) {
+          statusEl.textContent = "No valid filings found to ingest.";
+          addMessage("System", "No valid SEC filings were found. Try adding a form type like 10-K or 10-Q.", "assistant");
+          return false;
+        }
+        statusEl.textContent = "Ingesting filings...";
+        for (const item of validResults) {
+          await fetchJSON("/sec/ingest", {
+            method: "POST",
+            body: JSON.stringify({
+              cik: item.cik,
+              accession_number: item.accession_number,
+              form_type: item.form_type,
+              filed_date: item.filed_date,
+              company_name: item.company_name,
+              filing_url: item.filing_url,
+            }),
+          });
+        }
+        return true;
+      }
+
       async function sendPrompt() {
+        if (isSubmitting) {
+          return;
+        }
         const question = promptInput.value.trim();
         if (!question) return;
+        isSubmitting = true;
         addMessage("You", question, "user");
         promptInput.value = "";
         statusEl.textContent = "Thinking...";
         sendButton.disabled = true;
         try {
+          if (autoIngestToggle && autoIngestToggle.checked) {
+            const ingested = await ingestFromQuestion(question);
+            if (!ingested) {
+              statusEl.textContent = "";
+              sendButton.disabled = false;
+              return;
+            }
+          }
           const payload = { question };
           const result = await fetchJSON("/rag/query", {
             method: "POST",
@@ -432,6 +503,7 @@
         } finally {
           statusEl.textContent = "";
           sendButton.disabled = false;
+          isSubmitting = false;
         }
       }
 
@@ -458,6 +530,9 @@
             return;
           }
           for (const item of results) {
+            if (!isValidSearchResult(item)) {
+              continue;
+            }
             const entry = document.createElement("div");
             entry.className = "list-item";
             const title = document.createElement("div");

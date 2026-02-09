@@ -2,8 +2,9 @@
 Embedding model factory/router.
 """
 from typing import Optional
-from app.core.config import OPENAI_API_KEY
+from app.core.config import OPENAI_API_KEY, EMBEDDING_PROVIDER, LOCAL_EMBEDDING_MODEL
 from app.services.embeddings.openai_embeddings import OpenAIEmbeddings
+from app.services.embeddings.local_embeddings import LocalEmbeddings
 from app.services.embeddings.base import BaseEmbeddingModel
 from app.core.exceptions import ConfigurationError
 from app.core.logging_config import get_logger
@@ -15,7 +16,7 @@ _embedding_model: Optional[BaseEmbeddingModel] = None
 
 
 def get_embedding_model(
-    provider: str = "openai",
+    provider: Optional[str] = None,
     model_name: Optional[str] = None,
     api_key: Optional[str] = None,
 ) -> BaseEmbeddingModel:
@@ -33,6 +34,8 @@ def get_embedding_model(
         ConfigurationError: If provider or API key is missing
     """
     global _embedding_model
+    
+    provider = provider or EMBEDDING_PROVIDER
     
     if provider == "openai":
         resolved_key = api_key or OPENAI_API_KEY
@@ -60,10 +63,23 @@ def get_embedding_model(
         # Per-request override: do not cache
         return OpenAIEmbeddings(api_key=resolved_key, model_name=model)
         
+    elif provider == "local":
+        model = model_name or LOCAL_EMBEDDING_MODEL
+        
+        if _embedding_model and isinstance(_embedding_model, LocalEmbeddings):
+            if _embedding_model.model_name == model:
+                return _embedding_model
+        
+        _embedding_model = LocalEmbeddings(model_name=model)
+        logger.info(
+            "Initialized local embeddings",
+            extra={"provider": "local", "model": model, "dimension": _embedding_model.get_dimension()}
+        )
+        
     else:
         raise ConfigurationError(
             f"Unsupported embedding provider: {provider}",
-            details={"supported_providers": ["openai"]}
+            details={"supported_providers": ["openai", "local"]}
         )
     
     return _embedding_model

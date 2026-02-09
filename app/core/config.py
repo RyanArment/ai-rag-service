@@ -8,6 +8,10 @@ load_dotenv()
 
 # LLM Configuration
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "anthropic")
+EMBEDDING_PROVIDER = os.getenv("EMBEDDING_PROVIDER")
+if not EMBEDDING_PROVIDER:
+    EMBEDDING_PROVIDER = "local" if LLM_PROVIDER == "anthropic" else "openai"
+LOCAL_EMBEDDING_MODEL = os.getenv("LOCAL_EMBEDDING_MODEL", "all-MiniLM-L6-v2")
 
 # API Keys
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
@@ -39,7 +43,11 @@ if not DATABASE_URL:
         raise RuntimeError("DATABASE_URL must be set when DEBUG=false")
 
 # Vector Store Configuration
-VECTOR_STORE_PROVIDER = os.getenv("VECTOR_STORE_PROVIDER", "pgvector")  # pgvector or chroma
+VECTOR_STORE_PROVIDER = os.getenv("VECTOR_STORE_PROVIDER")
+if not VECTOR_STORE_PROVIDER:
+    VECTOR_STORE_PROVIDER = "chroma" if EMBEDDING_PROVIDER == "local" else "pgvector"
+if EMBEDDING_PROVIDER == "local" and VECTOR_STORE_PROVIDER == "pgvector":
+    raise RuntimeError("EMBEDDING_PROVIDER=local requires VECTOR_STORE_PROVIDER=chroma")
 CHROMA_PERSIST_DIR = os.getenv("CHROMA_PERSIST_DIR", "./chroma_db")
 
 # SEC EDGAR Configuration

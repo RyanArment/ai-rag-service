@@ -7,6 +7,7 @@ from app.services.vector_store.vector_store_router import get_vector_store
 from app.services.llm_router import get_llm_client
 from app.services.vector_store.base import SearchResult
 from app.core.logging_config import get_logger
+from app.core.config import OPENAI_API_KEY, EMBEDDING_PROVIDER
 
 logger = get_logger(__name__)
 
@@ -52,17 +53,23 @@ class RAGPipeline:
         Returns:
             Dictionary with answer, context, and metadata
         """
-        # Step 1: Generate query embedding
-        embedding_model = get_embedding_model(api_key=embedding_api_key)
-        query_embedding = embedding_model.embed(question)
-        
-        # Step 2: Retrieve relevant documents
-        vector_store = get_vector_store()
-        search_results = vector_store.search(
-            query_embedding=query_embedding,
-            top_k=self.top_k,
-            filter=filter,
-        )
+        # Step 1: Generate query embedding (optional)
+        search_results: List[SearchResult] = []
+        embedding_provider = EMBEDDING_PROVIDER
+        embedding_key = embedding_api_key or OPENAI_API_KEY if embedding_provider == "openai" else None
+        if embedding_provider != "openai" or embedding_key:
+            embedding_model = get_embedding_model(provider=embedding_provider, api_key=embedding_key)
+            query_embedding = embedding_model.embed(question)
+            
+            # Step 2: Retrieve relevant documents
+            vector_store = get_vector_store()
+            search_results = vector_store.search(
+                query_embedding=query_embedding,
+                top_k=self.top_k,
+                filter=filter,
+            )
+        else:
+            logger.info("Skipping retrieval; no embedding key available")
         
         # Step 3: Build context from retrieved documents
         context_chunks = []
@@ -81,8 +88,18 @@ class RAGPipeline:
         context = "\n\n".join(context_chunks)
         
         # Step 4: Build prompt with context
-        if system_prompt:
-            prompt = f"""{system_prompt}
+        if context_chunks:
+            if system_prompt:
+                prompt = f"""{system_prompt}
+
+Context:
+{context}
+
+Question: {question}
+
+Answer:"""
+            else:
+                prompt = f"""Use the following context to answer the question. If the context doesn't contain enough information, say so.
 
 Context:
 {context}
@@ -91,10 +108,14 @@ Question: {question}
 
 Answer:"""
         else:
-            prompt = f"""Use the following context to answer the question. If the context doesn't contain enough information, say so.
+            if system_prompt:
+                prompt = f"""{system_prompt}
 
-Context:
-{context}
+Question: {question}
+
+Answer:"""
+            else:
+                prompt = f"""Answer the question as best you can.
 
 Question: {question}
 
@@ -136,17 +157,23 @@ Answer:"""
         embedding_api_key: Optional[str] = None,
     ) -> dict:
         """Async version of query()."""
-        # Step 1: Generate query embedding
-        embedding_model = get_embedding_model(api_key=embedding_api_key)
-        query_embedding = await embedding_model.embed_async(question)
-        
-        # Step 2: Retrieve relevant documents
-        vector_store = get_vector_store()
-        search_results = vector_store.search(
-            query_embedding=query_embedding,
-            top_k=self.top_k,
-            filter=filter,
-        )
+        # Step 1: Generate query embedding (optional)
+        search_results: List[SearchResult] = []
+        embedding_provider = EMBEDDING_PROVIDER
+        embedding_key = embedding_api_key or OPENAI_API_KEY if embedding_provider == "openai" else None
+        if embedding_provider != "openai" or embedding_key:
+            embedding_model = get_embedding_model(provider=embedding_provider, api_key=embedding_key)
+            query_embedding = await embedding_model.embed_async(question)
+            
+            # Step 2: Retrieve relevant documents
+            vector_store = get_vector_store()
+            search_results = vector_store.search(
+                query_embedding=query_embedding,
+                top_k=self.top_k,
+                filter=filter,
+            )
+        else:
+            logger.info("Skipping retrieval; no embedding key available")
         
         # Step 3: Build context
         context_chunks = []
@@ -165,8 +192,18 @@ Answer:"""
         context = "\n\n".join(context_chunks)
         
         # Step 4: Build prompt
-        if system_prompt:
-            prompt = f"""{system_prompt}
+        if context_chunks:
+            if system_prompt:
+                prompt = f"""{system_prompt}
+
+Context:
+{context}
+
+Question: {question}
+
+Answer:"""
+            else:
+                prompt = f"""Use the following context to answer the question. If the context doesn't contain enough information, say so.
 
 Context:
 {context}
@@ -175,10 +212,14 @@ Question: {question}
 
 Answer:"""
         else:
-            prompt = f"""Use the following context to answer the question. If the context doesn't contain enough information, say so.
+            if system_prompt:
+                prompt = f"""{system_prompt}
 
-Context:
-{context}
+Question: {question}
+
+Answer:"""
+            else:
+                prompt = f"""Answer the question as best you can.
 
 Question: {question}
 
