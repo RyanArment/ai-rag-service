@@ -16,6 +16,8 @@ from app.services.sec.edgar_client import EdgarClient
 from app.services.sec.ingestion import SECFilingIngestionService
 from app.services.sec.comparator import FilingComparator
 from app.services.agent.research_agent import ResearchAgent
+from app.services.sec.draft_generator import FilingDraftGenerator
+from app.services.sec.filing_templates import list_templates
 
 logger = get_logger(__name__)
 
@@ -24,6 +26,7 @@ edgar_client = EdgarClient()
 ingestor = SECFilingIngestionService()
 comparator = FilingComparator()
 agent = ResearchAgent()
+draft_generator = FilingDraftGenerator()
 queue_processor = SECFilingQueueProcessor()
 
 
@@ -74,6 +77,53 @@ class SECCompareRequest(BaseModel):
     accession_b: str = Field(..., min_length=10, max_length=25)
     focus_topic: Optional[str] = Field(None, max_length=2000)
     top_k: int = Field(6, ge=1, le=20)
+
+
+class SECDraftRequest(BaseModel):
+    template_id: str = Field(..., min_length=1, max_length=64)
+    query: str = Field(..., min_length=1, max_length=2000, description="EDGAR search query")
+    instructions: Optional[str] = Field(None, max_length=4000)
+    company_name: Optional[str] = Field(None, max_length=255)
+    form_types: Optional[List[str]] = None
+    max_results: int = Field(3, ge=1, le=10)
+    temperature: float = Field(0.35, ge=0.0, le=1.0)
+
+
+@router.get("/templates", response_model=APIResponse)
+async def list_filing_templates(http_request: Request):
+    request_id = getattr(http_request.state, "request_id", None)
+    return APIResponse(
+        success=True,
+        data={"templates": list_templates(include_body=True)},
+        request_id=request_id,
+    )
+
+
+@router.post("/draft", response_model=APIResponse)
+async def generate_filing_draft(
+    request: SECDraftRequest,
+    http_request: Request,
+    db: Session = Depends(get_db),
+):
+    request_id = getattr(http_request.state, "request_id", None)
+    try:
+        result = await draft_generator.generate(
+            db=db,
+            template_id=request.template_id,
+            query=request.query,
+            instructions=request.instructions,
+            company_name=request.company_name,
+            form_types=request.form_types,
+            max_results=request.max_results,
+            temperature=request.temperature,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.error(f"Filing draft generation failed: {exc}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    return APIResponse(success=True, data=result, request_id=request_id)
 
 
 @router.post("/search", response_model=APIResponse)

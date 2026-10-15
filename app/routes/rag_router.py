@@ -83,7 +83,11 @@ async def rag_query(
             filter["source_type"] = "sec_filing"
 
         requested_provider = http_request.headers.get("X-LLM-Provider")
-        llm_provider = requested_provider if requested_provider in {"openai", "anthropic"} else LLM_PROVIDER
+        llm_provider = (
+            requested_provider
+            if requested_provider in {"openai", "anthropic", "xai"}
+            else LLM_PROVIDER
+        )
         openai_key = http_request.headers.get("X-OpenAI-Key")
         anthropic_key = http_request.headers.get("X-Anthropic-Key")
         llm_api_key = openai_key if llm_provider == "openai" else anthropic_key

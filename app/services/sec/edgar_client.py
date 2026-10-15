@@ -138,61 +138,86 @@ class EdgarClient:
         url = f"https://www.sec.gov/Archives/edgar/data/{cik_str}/{accession_no_nodash}/index.json"
         return await self._get_json(url)
 
-    async def download_primary_filing_html(self, cik: str, accession_number: str) -> str:
-        """Download the primary HTML document for a filing."""
+    @staticmethod
+    def _is_xbrl_exhibit(name: str) -> bool:
+        lower = name.lower()
+        if re.match(r"r\d+[a-z]?\.htm", lower):
+            return True
+        if lower.endswith((".xml", ".xsd", ".json")):
+            return True
+        if "index" in lower and lower.endswith((".htm", ".html")):
+            return True
+        return False
+
+    def _rank_filing_documents(
+        self,
+        items: List[Dict[str, Any]],
+        form_type: Optional[str] = None,
+    ) -> List[str]:
+        """Prefer full-submission .txt, then main form HTML (not XBRL exhibits)."""
+        base_form = (form_type or "").upper().split("-")[0]
+
+        def score(name: str, size: int) -> tuple:
+            lower = name.lower()
+            rank = 0
+            if lower.endswith(".txt"):
+                rank += 200
+            if lower.endswith((".htm", ".html")) and not self._is_xbrl_exhibit(name):
+                rank += 100
+            if base_form and base_form.lower().replace("-", "") in lower.replace("-", ""):
+                rank += 40
+            if self._is_xbrl_exhibit(name):
+                rank -= 200
+            return (rank, size)
+
+        ranked = sorted(
+            [item for item in items if item.get("name")],
+            key=lambda item: score(item.get("name", ""), int(item.get("size") or 0)),
+            reverse=True,
+        )
+        return [item["name"] for item in ranked]
+
+    async def download_primary_filing_html(
+        self,
+        cik: str,
+        accession_number: str,
+        form_type: Optional[str] = None,
+    ) -> str:
+        """Download the primary filing document (full submission .txt or main HTML)."""
         accession_number = self._sanitize_accession(accession_number)
-        cache_path = os.path.join(SEC_CACHE_DIR, f"{accession_number}.html")
+        cache_path = os.path.join(SEC_CACHE_DIR, f"{accession_number}.v2.txt")
         if os.path.exists(cache_path):
             with open(cache_path, "r", encoding="utf-8") as handle:
                 return handle.read()
 
         index_json = await self.get_filing_index(cik=cik, accession_number=accession_number)
         items = index_json.get("directory", {}).get("item", [])
+        if isinstance(items, dict):
+            items = [items]
 
-        candidate = None
-        html_items = []
-        txt_items = []
-        for item in items:
-            name = item.get("name", "")
-            lower_name = name.lower()
-            if lower_name.endswith((".htm", ".html")):
-                html_items.append(item)
-            elif lower_name.endswith(".txt"):
-                txt_items.append(item)
-
-        def sorted_by_size(items_list):
-            return sorted(items_list, key=lambda i: i.get("size", 0), reverse=True)
-
-        # Prefer non-index HTML, then TXT, then any HTML (index pages last)
-        non_index_html = [item for item in html_items if "index" not in item.get("name", "").lower()]
-        candidates = (
-            [item.get("name") for item in sorted_by_size(non_index_html)]
-            + [item.get("name") for item in sorted_by_size(txt_items)]
-            + [item.get("name") for item in sorted_by_size(html_items)]
-        )
-        candidates = [name for name in candidates if name]
-
+        candidates = self._rank_filing_documents(items, form_type=form_type)
         if not candidates:
             raise ValueError("No primary document found in filing index")
 
         accession_no_nodash = accession_number.replace("-", "")
         cik_str = str(int(cik))
-        html = None
+        content = None
         for candidate in candidates:
             url = f"https://www.sec.gov/Archives/edgar/data/{cik_str}/{accession_no_nodash}/{candidate}"
             try:
-                html = await self._get_text(url)
-                break
+                content = await self._get_text(url)
+                if len(content.strip()) > 500:
+                    break
             except httpx.HTTPStatusError as exc:
                 if exc.response is not None and exc.response.status_code == 404:
                     continue
                 raise
 
-        if html is None:
+        if content is None or len(content.strip()) <= 500:
             raise ValueError("No downloadable primary document found in filing index")
 
         os.makedirs(SEC_CACHE_DIR, exist_ok=True)
         with open(cache_path, "w", encoding="utf-8") as handle:
-            handle.write(html)
+            handle.write(content)
 
-        return html
+        return content

@@ -2,9 +2,19 @@
 LLM Router - Factory for creating and managing LLM clients.
 """
 from typing import Optional
-from app.core.config import LLM_PROVIDER, OPENAI_API_KEY, ANTHROPIC_API_KEY
+from app.core.config import (
+    LLM_PROVIDER,
+    OPENAI_API_KEY,
+    OPENAI_BASE_URL,
+    OPENAI_MODEL,
+    ANTHROPIC_API_KEY,
+    XAI_API_KEY,
+    XAI_BASE_URL,
+    XAI_MODEL,
+)
 from app.services.llm.openai_client import OpenAIClient
 from app.services.llm.anthropic_client import AnthropicClient
+from app.services.llm.xai_client import XAIClient
 from app.services.llm.base import BaseLLMClient
 from app.core.exceptions import ConfigurationError
 from app.core.logging_config import get_logger
@@ -48,8 +58,16 @@ def get_llm_client(
                 details={"provider": "openai"}
             )
         if api_key:
-            return OpenAIClient(api_key=resolved_key)
-        _llm_client = OpenAIClient(api_key=resolved_key)
+            return OpenAIClient(
+                api_key=resolved_key,
+                model=OPENAI_MODEL,
+                base_url=OPENAI_BASE_URL,
+            )
+        _llm_client = OpenAIClient(
+            api_key=resolved_key,
+            model=OPENAI_MODEL,
+            base_url=OPENAI_BASE_URL,
+        )
         logger.info("Initialized OpenAI client", extra={"provider": "openai", "model": _llm_client.model})
         
     elif provider == "anthropic":
@@ -63,11 +81,31 @@ def get_llm_client(
             return AnthropicClient(api_key=resolved_key)
         _llm_client = AnthropicClient(api_key=resolved_key)
         logger.info("Initialized Anthropic client", extra={"provider": "anthropic", "model": _llm_client.model})
+
+    elif provider == "xai":
+        resolved_key = api_key or XAI_API_KEY
+        if not resolved_key:
+            raise ConfigurationError(
+                "XAI_API_KEY not found in environment variables",
+                details={"provider": "xai"},
+            )
+        if api_key:
+            return XAIClient(
+                api_key=resolved_key,
+                model=XAI_MODEL,
+                base_url=XAI_BASE_URL,
+            )
+        _llm_client = XAIClient(
+            api_key=resolved_key,
+            model=XAI_MODEL,
+            base_url=XAI_BASE_URL,
+        )
+        logger.info("Initialized xAI client", extra={"provider": "xai", "model": _llm_client.model})
         
     else:
         raise ConfigurationError(
             f"Unsupported LLM provider: {provider}",
-            details={"supported_providers": ["openai", "anthropic"]}
+            details={"supported_providers": ["openai", "anthropic", "xai"]},
         )
     
     return _llm_client

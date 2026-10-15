@@ -15,7 +15,7 @@ from app.services.embeddings.embedding_router import get_embedding_model
 from app.services.vector_store.vector_store_router import get_vector_store
 from app.services.vector_store.base import Document as VectorDocument
 from app.services.sec.edgar_client import EdgarClient
-from app.services.sec.filing_parser import html_to_text, extract_sections
+from app.services.sec.filing_parser import extract_filing_text, extract_sections
 
 logger = get_logger(__name__)
 
@@ -59,8 +59,10 @@ class SECFilingIngestionService:
         company = self._get_or_create_company(db=db, cik=cik_padded, company_name=company_name)
 
         existing = db.query(SECFiling).filter(SECFiling.accession_number == accession_number).first()
-        if existing and existing.status == "indexed":
-            return existing
+        vector_store = get_vector_store()
+        if existing and existing.status == "indexed" and existing.document_id:
+            if hasattr(vector_store, "delete_by_metadata"):
+                vector_store.delete_by_metadata({"document_id": str(existing.document_id)})
 
         filing = existing or SECFiling(
             accession_number=accession_number,
@@ -76,17 +78,31 @@ class SECFilingIngestionService:
         db.commit()
         db.refresh(filing)
 
-        html = await self.client.download_primary_filing_html(cik=cik_padded, accession_number=accession_number)
-        text = html_to_text(html)
+        raw = await self.client.download_primary_filing_html(
+            cik=cik_padded,
+            accession_number=accession_number,
+            form_type=form_type,
+        )
+        text = extract_filing_text(raw, form_type=form_type)
         sections = extract_sections(text)
 
-        db_document = DocumentRepository.create_document(
-            db=db,
-            filename=f"{accession_number}.html",
-            file_size=len(html),
-            file_type="sec_filing",
-            status="processing",
-        )
+        if existing and existing.document_id:
+            db_document_id = existing.document_id
+            DocumentRepository.update_document(
+                db=db,
+                document_id=db_document_id,
+                status="processing",
+                chunks_count=0,
+            )
+            db_document = DocumentRepository.get_document(db=db, document_id=db_document_id)
+        else:
+            db_document = DocumentRepository.create_document(
+                db=db,
+                filename=f"{accession_number}.txt",
+                file_size=len(raw),
+                file_type="sec_filing",
+                status="processing",
+            )
 
         chunks = []
         for section in sections:
@@ -97,11 +113,14 @@ class SECFilingIngestionService:
                     "form_type": form_type,
                     "cik": cik_padded,
                     "accession_number": accession_number,
-                    "filed_date": filed_date,
+                    "filed_date": filed_date or "",
                     "filing_section": section.title,
                 },
             )
             chunks.extend(section_chunks)
+
+        if not chunks:
+            raise ValueError("No indexable text extracted from filing")
 
         embedding_model = get_embedding_model()
         texts = [chunk.content for chunk in chunks]
@@ -123,7 +142,6 @@ class SECFilingIngestionService:
                 )
             )
 
-        vector_store = get_vector_store()
         vector_store.add_documents(vector_documents)
 
         DocumentRepository.update_document(

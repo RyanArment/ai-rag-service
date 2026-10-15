@@ -25,10 +25,14 @@ class LLMResponse(BaseModel):
 class BaseLLMClient(ABC):
     """Abstract base class for all LLM providers."""
     
-    def __init__(self, api_key: str, model: str):
+    def __init__(self, api_key: str, model: str, provider: Optional[str] = None):
         self.api_key = api_key
         self.model = model
-        self.provider_name = self.__class__.__name__.replace("Client", "").lower()
+        self._provider_name = provider or self.__class__.__name__.replace("Client", "").lower()
+
+    @property
+    def provider_name(self) -> str:
+        return self._provider_name
     
     @abstractmethod
     def ask(

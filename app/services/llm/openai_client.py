@@ -16,10 +16,19 @@ logger = get_logger(__name__)
 class OpenAIClient(BaseLLMClient):
     """OpenAI LLM client."""
     
-    def __init__(self, api_key: str, model: str = "gpt-4o-mini"):
-        super().__init__(api_key, model)
-        self.client = OpenAI(api_key=api_key)
-        self.async_client = AsyncOpenAI(api_key=api_key)
+    def __init__(
+        self,
+        api_key: str,
+        model: str = "gpt-4o-mini",
+        base_url: Optional[str] = None,
+        provider: str = "openai",
+    ):
+        super().__init__(api_key, model, provider=provider)
+        client_kwargs = {"api_key": api_key}
+        if base_url:
+            client_kwargs["base_url"] = base_url
+        self.client = OpenAI(**client_kwargs)
+        self.async_client = AsyncOpenAI(**client_kwargs)
     
     def ask(
         self,
@@ -49,7 +58,7 @@ class OpenAIClient(BaseLLMClient):
             return LLMResponse(
                 content=response.choices[0].message.content or "",
                 model=self.model,
-                provider="openai",
+                provider=self.provider_name,
                 usage={
                     "prompt_tokens": response.usage.prompt_tokens,
                     "completion_tokens": response.usage.completion_tokens,
@@ -61,7 +70,7 @@ class OpenAIClient(BaseLLMClient):
             logger.error(f"OpenAI API error: {e}", extra={"provider": "openai", "error": str(e)})
             raise LLMProviderError(
                 f"OpenAI API error: {str(e)}",
-                provider="openai",
+                provider=self.provider_name,
                 status_code=getattr(e, "status_code", 500),
                 details={"error_type": type(e).__name__}
             )
@@ -69,7 +78,7 @@ class OpenAIClient(BaseLLMClient):
             logger.error(f"Unexpected error in OpenAI client: {e}", exc_info=True)
             raise LLMProviderError(
                 f"Unexpected error: {str(e)}",
-                provider="openai",
+                provider=self.provider_name,
                 details={"error_type": type(e).__name__}
             )
     
@@ -102,7 +111,7 @@ class OpenAIClient(BaseLLMClient):
             logger.error(f"OpenAI streaming error: {e}", extra={"provider": "openai"})
             raise LLMProviderError(
                 f"OpenAI streaming error: {str(e)}",
-                provider="openai",
+                provider=self.provider_name,
                 status_code=getattr(e, "status_code", 500),
             )
     
@@ -134,7 +143,7 @@ class OpenAIClient(BaseLLMClient):
             return LLMResponse(
                 content=response.choices[0].message.content or "",
                 model=self.model,
-                provider="openai",
+                provider=self.provider_name,
                 usage={
                     "prompt_tokens": response.usage.prompt_tokens,
                     "completion_tokens": response.usage.completion_tokens,
@@ -146,7 +155,7 @@ class OpenAIClient(BaseLLMClient):
             logger.error(f"OpenAI async API error: {e}", extra={"provider": "openai"})
             raise LLMProviderError(
                 f"OpenAI API error: {str(e)}",
-                provider="openai",
+                provider=self.provider_name,
                 status_code=getattr(e, "status_code", 500),
             )
     
@@ -179,6 +188,6 @@ class OpenAIClient(BaseLLMClient):
             logger.error(f"OpenAI async streaming error: {e}", extra={"provider": "openai"})
             raise LLMProviderError(
                 f"OpenAI streaming error: {str(e)}",
-                provider="openai",
+                provider=self.provider_name,
                 status_code=getattr(e, "status_code", 500),
             )

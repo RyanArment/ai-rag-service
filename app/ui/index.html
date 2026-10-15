@@ -4,16 +4,49 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>AI RAG Service UI</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500&family=Merriweather:wght@400;700&family=Source+Serif+4:wght@400;600&display=swap"
+      rel="stylesheet"
+    />
     <style>
       :root {
-        color-scheme: light dark;
+        color-scheme: dark;
         --bg: #0f1115;
         --panel: #151a21;
         --border: #2a3340;
         --text: #e6e8ee;
         --muted: #a7b0bf;
         --accent: #6aa8ff;
+        --accent-fg: #08121f;
         --danger: #ff6a6a;
+        --input-bg: #0f141b;
+        --message-bg: #121824;
+        --message-user-bg: #0e1b2a;
+        --message-user-border: #1f2d3f;
+        --list-item-bg: #121722;
+        --pill-bg: #222a36;
+        --badge-bg: #1c2330;
+      }
+
+      html.light {
+        color-scheme: light;
+        --bg: #f4f5f7;
+        --panel: #ffffff;
+        --border: #d8dde6;
+        --text: #1a1d24;
+        --muted: #5c6570;
+        --accent: #2563eb;
+        --accent-fg: #ffffff;
+        --danger: #dc2626;
+        --input-bg: #ffffff;
+        --message-bg: #ffffff;
+        --message-user-bg: #eef4ff;
+        --message-user-border: #c7d7f5;
+        --list-item-bg: #fafbfc;
+        --pill-bg: #eef1f5;
+        --badge-bg: #f0f2f5;
       }
 
       * {
@@ -49,6 +82,37 @@
       .sidebar {
         width: 360px;
         background: var(--panel);
+        min-height: 0;
+        overflow: hidden;
+      }
+
+      .sidebar-section {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        min-height: 0;
+      }
+
+      .sidebar-section--sources {
+        flex: 1 1 40%;
+      }
+
+      .sidebar-section--search {
+        flex: 1 1 60%;
+      }
+
+      .sidebar-divider {
+        border: none;
+        border-top: 1px solid var(--border);
+        margin: 0;
+        flex-shrink: 0;
+      }
+
+      .scroll-panel {
+        flex: 1;
+        min-height: 80px;
+        overflow-y: auto;
+        padding-right: 4px;
       }
 
       h1, h2 {
@@ -68,9 +132,9 @@
         align-items: center;
       }
 
-      input[type="text"], input[type="password"], textarea, select {
+      input[type="text"], textarea, select {
         width: 100%;
-        background: #0f141b;
+        background: var(--input-bg);
         color: var(--text);
         border: 1px solid var(--border);
         border-radius: 8px;
@@ -86,7 +150,7 @@
       button {
         background: var(--accent);
         border: none;
-        color: #08121f;
+        color: var(--accent-fg);
         font-weight: 600;
         border-radius: 8px;
         padding: 10px 14px;
@@ -116,20 +180,51 @@
       .message {
         padding: 12px;
         border-radius: 10px;
-        background: #121824;
+        background: var(--message-bg);
         border: 1px solid var(--border);
         white-space: pre-wrap;
       }
 
       .message.user {
-        background: #0e1b2a;
-        border-color: #1f2d3f;
+        background: var(--message-user-bg);
+        border-color: var(--message-user-border);
       }
 
       .message .label {
         font-size: 12px;
         color: var(--muted);
         margin-bottom: 6px;
+      }
+
+      .message.thinking-message {
+        border-style: dashed;
+        opacity: 0.95;
+      }
+
+      .thinking-shimmer {
+        display: inline-block;
+        font-size: 14px;
+        font-weight: 500;
+        background: linear-gradient(
+          90deg,
+          var(--muted) 0%,
+          var(--text) 45%,
+          var(--muted) 90%
+        );
+        background-size: 200% 100%;
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+        animation: thinking-shimmer 1.5s ease-in-out infinite;
+      }
+
+      @keyframes thinking-shimmer {
+        0% {
+          background-position: 100% 0;
+        }
+        100% {
+          background-position: -100% 0;
+        }
       }
 
       .status {
@@ -152,7 +247,7 @@
         padding: 10px;
         border-radius: 8px;
         border: 1px solid var(--border);
-        background: #121722;
+        background: var(--list-item-bg);
         display: flex;
         flex-direction: column;
         gap: 6px;
@@ -168,7 +263,7 @@
         display: inline-block;
         padding: 2px 8px;
         border-radius: 12px;
-        background: #222a36;
+        background: var(--pill-bg);
         color: var(--muted);
         font-size: 11px;
       }
@@ -177,10 +272,32 @@
         display: inline-block;
         padding: 2px 8px;
         border-radius: 999px;
-        background: #1c2330;
+        background: var(--badge-bg);
         color: var(--muted);
         font-size: 11px;
         border: 1px solid var(--border);
+      }
+
+      .header-row {
+        justify-content: space-between;
+      }
+
+      .header-row .header-left {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+
+      .theme-toggle {
+        flex-shrink: 0;
+        width: 40px;
+        height: 40px;
+        padding: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 18px;
+        line-height: 1;
       }
 
       .badge.on {
@@ -188,121 +305,355 @@
         border-color: #1f6b3a;
         background: #0f2a1d;
       }
+
+      .view-tabs {
+        display: flex;
+        gap: 8px;
+      }
+
+      .view-tabs button {
+        flex: 1;
+      }
+
+      .view-tabs button.active {
+        box-shadow: inset 0 0 0 2px var(--accent);
+      }
+
+      .view-panel {
+        display: flex;
+        flex-direction: column;
+        flex: 1;
+        min-height: 0;
+        gap: 12px;
+      }
+
+      .view-panel[hidden] {
+        display: none !important;
+      }
+
+      .draft-view {
+        gap: 8px;
+        overflow: hidden;
+      }
+
+      .draft-form {
+        flex-shrink: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .draft-form .field {
+        gap: 2px;
+      }
+
+      .draft-form .field-label {
+        margin-bottom: 0;
+        font-size: 11px;
+      }
+
+      .draft-form .row {
+        gap: 6px;
+      }
+
+      .draft-form .muted {
+        font-size: 11px;
+        line-height: 1.3;
+      }
+
+      #draftInstructions {
+        min-height: 52px;
+        padding: 8px 10px;
+      }
+
+      .draft-toolbar {
+        flex-wrap: wrap;
+        gap: 6px;
+        margin: 0;
+      }
+
+      .draft-toolbar button {
+        padding: 8px 12px;
+        font-size: 13px;
+      }
+
+      .draft-editor-panel {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 8px;
+        background: var(--input-bg);
+      }
+
+      .draft-format-bar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        flex-shrink: 0;
+        align-items: center;
+      }
+
+      .draft-format-bar .fmt-btn {
+        padding: 4px 10px;
+        font-size: 12px;
+        font-weight: 600;
+        min-width: 32px;
+        line-height: 1.2;
+      }
+
+      .draft-format-bar .fmt-btn.italic {
+        font-style: italic;
+      }
+
+      .draft-format-bar .fmt-sep {
+        width: 1px;
+        height: 20px;
+        background: var(--border);
+        margin: 0 2px;
+      }
+
+      #draftFont {
+        width: auto;
+        min-width: 128px;
+        max-width: 180px;
+        padding: 4px 8px;
+        font-size: 12px;
+        margin-left: auto;
+      }
+
+      .draft-editor {
+        flex: 1;
+        min-height: 280px;
+        width: 100%;
+        font-family: var(--draft-font-family, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace);
+        font-size: 13px;
+        line-height: 1.5;
+        resize: none;
+        overflow-y: auto;
+        border: none;
+        background: transparent;
+        padding: 4px 2px;
+      }
+
+      .draft-editor:focus {
+        outline: none;
+      }
+
+      .chat-actions {
+        flex-wrap: wrap;
+        align-items: center;
+      }
+
+      #chatDraftTemplate {
+        flex: 1;
+        min-width: 160px;
+        max-width: 280px;
+      }
+
+      .field-label {
+        font-size: 12px;
+        color: var(--muted);
+        margin-bottom: 4px;
+      }
+
+      .field {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        flex: 1;
+        min-width: 140px;
+      }
     </style>
   </head>
   <body data-debug="{{DEBUG}}">
     <div class="layout">
       <section class="panel chat-panel">
-        <div class="row">
-          <h1>Prompt</h1>
-          <span id="debugBadge" class="badge">DEBUG: unknown</span>
+        <div class="row header-row">
+          <div class="header-left">
+            <h1 id="viewTitle">Chat</h1>
+            <span id="debugBadge" class="badge">DEBUG: unknown</span>
+          </div>
+          <button id="themeToggle" type="button" class="secondary theme-toggle" aria-pressed="false" aria-label="Switch to light mode" title="Light mode">☀️</button>
         </div>
-        <div class="row" id="serviceKeyRow">
-          <input id="apiKey" type="password" placeholder="Service API key (X-API-Key)" />
+        <div class="view-tabs row">
+          <button type="button" id="tabChat" class="secondary active">Chat</button>
+          <button type="button" id="tabDraft" class="secondary">Draft filing</button>
         </div>
-        <div class="row">
-          <select id="llmProvider" aria-label="LLM provider">
-            <option value="anthropic">Anthropic</option>
-            <option value="openai">OpenAI</option>
-          </select>
-          <input id="providerKey" type="password" placeholder="Provider API key" />
-          <button id="saveKey" class="secondary">Save</button>
+
+        <div id="chatView" class="view-panel">
+          <div class="muted">RAG queries call `/rag/query`. Sources appear on the right.</div>
+          <div id="messages" class="messages"></div>
+          <div class="row">
+            <textarea id="prompt" placeholder="Ask a question"></textarea>
+          </div>
+          <div class="row chat-actions">
+            <button id="send">Send</button>
+            <button id="draftFromChat" type="button" class="secondary">Generate draft</button>
+            <select id="chatDraftTemplate" aria-label="Draft template"></select>
+            <label class="row" style="gap: 6px;">
+              <input id="autoIngest" type="checkbox" checked />
+              <span class="muted">Auto‑ingest SEC filings</span>
+            </label>
+            <div id="status" class="status"></div>
+          </div>
         </div>
-        <div class="muted">Service key secures this API. Provider key is for the selected LLM.</div>
-        <div class="muted">RAG queries call `/rag/query`. Sources appear on the right.</div>
-        <div id="messages" class="messages"></div>
-        <div class="row">
-          <textarea id="prompt" placeholder="Ask a question"></textarea>
-        </div>
-        <div class="row">
-          <button id="send">Send</button>
-          <label class="row" style="gap: 6px;">
-            <input id="autoIngest" type="checkbox" checked />
-            <span class="muted">Auto‑ingest SEC filings</span>
-          </label>
-          <div id="status" class="status"></div>
+
+        <div id="draftView" class="view-panel draft-view" hidden>
+          <div class="draft-form">
+            <div class="row">
+              <div class="field">
+                <span class="field-label">Template</span>
+                <select id="draftTemplate" aria-label="Filing template"></select>
+              </div>
+              <div class="field">
+                <span class="field-label">Company name</span>
+                <input id="draftCompany" type="text" placeholder="Registrant legal name" />
+              </div>
+            </div>
+            <div class="field">
+              <span class="field-label">EDGAR search query</span>
+              <input id="draftQuery" type="text" placeholder="Name, ticker, CIK, or form type" />
+            </div>
+            <div class="field">
+              <span class="field-label">Instructions (optional)</span>
+              <textarea id="draftInstructions" rows="2" placeholder="Optional focus for the draft"></textarea>
+            </div>
+            <div class="row draft-toolbar">
+              <button id="generateDraft">Generate draft</button>
+              <button id="loadTemplateSkeleton" class="secondary" type="button">Reset to template</button>
+              <button id="saveDraftLocal" class="secondary" type="button">Save draft</button>
+              <button id="downloadDraft" class="secondary" type="button">Download .md</button>
+              <div id="draftStatus" class="status"></div>
+            </div>
+          </div>
+          <div class="draft-editor-panel">
+            <div class="draft-format-bar" role="toolbar" aria-label="Draft formatting">
+              <button type="button" class="secondary fmt-btn" data-fmt="bold" title="Bold">B</button>
+              <button type="button" class="secondary fmt-btn italic" data-fmt="italic" title="Italic">I</button>
+              <button type="button" class="secondary fmt-btn" data-fmt="h2" title="Heading">H</button>
+              <span class="fmt-sep" aria-hidden="true"></span>
+              <button type="button" class="secondary fmt-btn" data-fmt="bullet" title="Bullet list">•</button>
+              <button type="button" class="secondary fmt-btn" data-fmt="quote" title="Quote">&gt;</button>
+              <button type="button" class="secondary fmt-btn" data-fmt="link" title="Link">Link</button>
+              <button type="button" class="secondary fmt-btn" data-fmt="code" title="Inline code">&lt;&gt;</button>
+              <span class="fmt-sep" aria-hidden="true"></span>
+              <select id="draftFont" aria-label="Editor font">
+                <option value="mono">System mono</option>
+                <option value="plex">IBM Plex Mono</option>
+                <option value="sans">System sans</option>
+                <option value="inter">Inter</option>
+                <option value="serif">Georgia</option>
+                <option value="merriweather">Merriweather</option>
+                <option value="source">Source Serif 4</option>
+                <option value="times">Times New Roman</option>
+              </select>
+            </div>
+            <textarea id="draftEditor" class="draft-editor" placeholder="Generated draft will appear here…"></textarea>
+          </div>
         </div>
       </section>
       <aside class="panel sidebar">
-        <h2>SEC sources</h2>
-        <div class="muted">Direct links to filings used by the last answer.</div>
-        <div id="sources" class="list"></div>
-        <hr style="border-color: var(--border); width: 100%;" />
-        <h2>Add specific file</h2>
-        <div class="row">
-          <input id="searchQuery" type="text" placeholder="Enter file name or id" />
-          <button id="searchBtn" class="secondary">Search</button>
+        <div class="sidebar-section sidebar-section--sources">
+          <h2>SEC sources</h2>
+          <div class="muted">Direct links to filings used by the last answer.</div>
+          <div id="sources" class="list scroll-panel"></div>
         </div>
-        <div id="searchError" class="error"></div>
-        <div id="searchResults" class="list"></div>
+        <hr class="sidebar-divider" />
+        <div class="sidebar-section sidebar-section--search">
+          <h2>Add specific file</h2>
+          <div class="row">
+            <input id="searchQuery" type="text" placeholder="Enter file name or id" />
+            <button id="searchBtn" class="secondary">Search</button>
+          </div>
+          <div id="searchError" class="error"></div>
+          <div id="searchResults" class="list scroll-panel"></div>
+        </div>
       </aside>
     </div>
 
     <script>
-      const apiKeyInput = document.getElementById("apiKey");
-      const llmProviderSelect = document.getElementById("llmProvider");
-      const providerKeyInput = document.getElementById("providerKey");
-      const saveKeyButton = document.getElementById("saveKey");
       const promptInput = document.getElementById("prompt");
       const sendButton = document.getElementById("send");
+      const draftFromChatBtn = document.getElementById("draftFromChat");
+      const chatDraftTemplateSelect = document.getElementById("chatDraftTemplate");
       const autoIngestToggle = document.getElementById("autoIngest");
       const messagesEl = document.getElementById("messages");
       const statusEl = document.getElementById("status");
-      const serviceKeyRow = document.getElementById("serviceKeyRow");
       const debugBadge = document.getElementById("debugBadge");
+      const themeToggle = document.getElementById("themeToggle");
       const sourcesEl = document.getElementById("sources");
       const searchQueryInput = document.getElementById("searchQuery");
       const searchBtn = document.getElementById("searchBtn");
       const searchErrorEl = document.getElementById("searchError");
       const searchResultsEl = document.getElementById("searchResults");
+      const viewTitle = document.getElementById("viewTitle");
+      const tabChat = document.getElementById("tabChat");
+      const tabDraft = document.getElementById("tabDraft");
+      const chatView = document.getElementById("chatView");
+      const draftView = document.getElementById("draftView");
+      const draftTemplateSelect = document.getElementById("draftTemplate");
+      const draftCompanyInput = document.getElementById("draftCompany");
+      const draftQueryInput = document.getElementById("draftQuery");
+      const draftInstructionsInput = document.getElementById("draftInstructions");
+      const draftEditor = document.getElementById("draftEditor");
+      const draftFontSelect = document.getElementById("draftFont");
+      const generateDraftBtn = document.getElementById("generateDraft");
+      const loadTemplateSkeletonBtn = document.getElementById("loadTemplateSkeleton");
+      const saveDraftLocalBtn = document.getElementById("saveDraftLocal");
+      const downloadDraftBtn = document.getElementById("downloadDraft");
+      const draftStatusEl = document.getElementById("draftStatus");
 
       const sourceMap = new Map();
       let isSubmitting = false;
+      let isGeneratingDraft = false;
+      let thinkingMessageEl = null;
+      let filingTemplates = [];
+      const DRAFT_STORAGE_KEY = "filingDraftEditor";
+      const DRAFT_FONT_KEY = "draftEditorFont";
 
-      function getProviderStorageKey(provider) {
-        return provider === "openai" ? "openaiKey" : "anthropicKey";
-      }
+      const DRAFT_FONT_STACKS = {
+        mono: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+        plex: '"IBM Plex Mono", ui-monospace, monospace',
+        sans: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+        inter: '"Inter", -apple-system, BlinkMacSystemFont, sans-serif',
+        serif: 'Georgia, "Times New Roman", Times, serif',
+        merriweather: '"Merriweather", Georgia, serif',
+        source: '"Source Serif 4", Georgia, serif',
+        times: '"Times New Roman", Times, serif',
+      };
 
-      function loadApiKey() {
+      function initDebugBadge() {
         const isDebug = document.body.dataset.debug === "true";
-        if (serviceKeyRow) {
-          serviceKeyRow.style.display = isDebug ? "none" : "flex";
-        }
         if (debugBadge) {
           debugBadge.textContent = isDebug ? "DEBUG: true" : "DEBUG: false";
           debugBadge.classList.toggle("on", isDebug);
         }
-        const stored = localStorage.getItem("apiKey");
-        if (stored) {
-          apiKeyInput.value = stored;
-        }
-        const preferred = localStorage.getItem("llmProvider");
-        if (preferred) {
-          llmProviderSelect.value = preferred;
-        }
-        const providerKey = localStorage.getItem(getProviderStorageKey(llmProviderSelect.value));
-        if (providerKey) {
-          providerKeyInput.value = providerKey;
+      }
+
+      function applyTheme(light) {
+        document.documentElement.classList.toggle("light", light);
+        if (themeToggle) {
+          themeToggle.textContent = light ? "🌙" : "☀️";
+          themeToggle.setAttribute("aria-pressed", light ? "true" : "false");
+          themeToggle.setAttribute("aria-label", light ? "Switch to dark mode" : "Switch to light mode");
+          themeToggle.title = light ? "Dark mode" : "Light mode";
         }
       }
 
-      function saveApiKey() {
-        const key = apiKeyInput.value.trim();
-        if (key) {
-          localStorage.setItem("apiKey", key);
-        } else {
-          localStorage.removeItem("apiKey");
-        }
-        const provider = llmProviderSelect.value;
-        const providerKey = providerKeyInput.value.trim();
-        localStorage.setItem("llmProvider", provider);
-        if (providerKey) {
-          localStorage.setItem(getProviderStorageKey(provider), providerKey);
-        } else {
-          localStorage.removeItem(getProviderStorageKey(provider));
-        }
-        statusEl.textContent = (key || providerKey) ? "Keys saved." : "Keys cleared.";
-        setTimeout(() => (statusEl.textContent = ""), 2000);
+      function initTheme() {
+        const stored = localStorage.getItem("uiTheme");
+        const light = stored === "light";
+        applyTheme(light);
+      }
+
+      function toggleTheme() {
+        const light = !document.documentElement.classList.contains("light");
+        applyTheme(light);
+        localStorage.setItem("uiTheme", light ? "light" : "dark");
       }
 
       function addMessage(label, text, className) {
@@ -317,6 +668,43 @@
         wrapper.appendChild(textEl);
         messagesEl.appendChild(wrapper);
         messagesEl.scrollTop = messagesEl.scrollHeight;
+      }
+
+      function showThinkingMessage(text) {
+        removeThinkingMessage();
+        const wrapper = document.createElement("div");
+        wrapper.className = "message assistant thinking-message";
+        wrapper.setAttribute("aria-live", "polite");
+        const labelEl = document.createElement("div");
+        labelEl.className = "label";
+        labelEl.textContent = "Assistant";
+        const textEl = document.createElement("div");
+        textEl.className = "thinking-shimmer";
+        textEl.textContent = text || "Thinking...";
+        wrapper.appendChild(labelEl);
+        wrapper.appendChild(textEl);
+        messagesEl.appendChild(wrapper);
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+        thinkingMessageEl = wrapper;
+      }
+
+      function setThinkingMessage(text) {
+        if (!thinkingMessageEl) {
+          showThinkingMessage(text);
+          return;
+        }
+        const textEl = thinkingMessageEl.querySelector(".thinking-shimmer");
+        if (textEl) {
+          textEl.textContent = text;
+        }
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+      }
+
+      function removeThinkingMessage() {
+        if (thinkingMessageEl && thinkingMessageEl.parentNode) {
+          thinkingMessageEl.parentNode.removeChild(thinkingMessageEl);
+        }
+        thinkingMessageEl = null;
       }
 
       function normalizeCik(cik) {
@@ -367,10 +755,279 @@
         renderSources();
       }
 
-      function onProviderChange() {
-        const provider = llmProviderSelect.value;
-        localStorage.setItem("llmProvider", provider);
-        providerKeyInput.value = localStorage.getItem(getProviderStorageKey(provider)) || "";
+      function applySourcesFromList(sources) {
+        sourceMap.clear();
+        for (const source of sources || []) {
+          const meta = source.metadata || {};
+          const accession = meta.accession_number;
+          const cik = meta.cik;
+          const url = buildFilingUrl(cik, accession);
+          if (!url) continue;
+          upsertSource({
+            key: `${cik || "unknown"}:${accession}`,
+            url,
+            title: accession || "SEC filing",
+            meta: `${meta.form_type || "SEC filing"}${meta.filed_date ? " • " + meta.filed_date : ""}`,
+          });
+        }
+      }
+
+      function setActiveView(view) {
+        const isDraft = view === "draft";
+        chatView.hidden = isDraft;
+        draftView.hidden = !isDraft;
+        tabChat.classList.toggle("active", !isDraft);
+        tabDraft.classList.toggle("active", isDraft);
+        viewTitle.textContent = isDraft ? "Draft filing" : "Chat";
+        localStorage.setItem("uiView", view);
+      }
+
+      function fillTemplateSelect(selectEl) {
+        if (!selectEl) return;
+        selectEl.innerHTML = "";
+        for (const t of filingTemplates) {
+          const opt = document.createElement("option");
+          opt.value = t.id;
+          opt.textContent = `${t.name} (${t.form_type || "any"})`;
+          opt.title = t.description || "";
+          selectEl.appendChild(opt);
+        }
+      }
+
+      function syncTemplateSelects(sourceSelect) {
+        const value = sourceSelect.value;
+        if (draftTemplateSelect && draftTemplateSelect !== sourceSelect) {
+          draftTemplateSelect.value = value;
+        }
+        if (chatDraftTemplateSelect && chatDraftTemplateSelect !== sourceSelect) {
+          chatDraftTemplateSelect.value = value;
+        }
+      }
+
+      async function loadFilingTemplates() {
+        const result = await fetchJSON("/sec/templates");
+        filingTemplates = result.data.templates || [];
+        fillTemplateSelect(draftTemplateSelect);
+        fillTemplateSelect(chatDraftTemplateSelect);
+      }
+
+      function getSelectedTemplateMeta() {
+        const id = draftTemplateSelect.value;
+        return filingTemplates.find((t) => t.id === id);
+      }
+
+      function loadDraftFromStorage() {
+        const saved = localStorage.getItem(DRAFT_STORAGE_KEY);
+        if (saved) {
+          draftEditor.value = saved;
+        }
+      }
+
+      function saveDraftToStorage() {
+        localStorage.setItem(DRAFT_STORAGE_KEY, draftEditor.value);
+        draftStatusEl.textContent = "Draft saved in this browser.";
+        setTimeout(() => (draftStatusEl.textContent = ""), 2000);
+      }
+
+      function applyDraftFont(fontKey) {
+        const stack = DRAFT_FONT_STACKS[fontKey] || DRAFT_FONT_STACKS.mono;
+        document.documentElement.style.setProperty("--draft-font-family", stack);
+        if (draftEditor) {
+          draftEditor.style.fontFamily = stack;
+        }
+        localStorage.setItem(DRAFT_FONT_KEY, fontKey);
+      }
+
+      function initDraftFont() {
+        const stored = localStorage.getItem(DRAFT_FONT_KEY) || "mono";
+        const key = DRAFT_FONT_STACKS[stored] ? stored : "mono";
+        if (draftFontSelect) {
+          draftFontSelect.value = key;
+        }
+        applyDraftFont(key);
+      }
+
+      function applyDraftFormat(kind) {
+        const ta = draftEditor;
+        if (!ta) return;
+        const start = ta.selectionStart;
+        const end = ta.selectionEnd;
+        const text = ta.value;
+        const selected = text.slice(start, end);
+        let before = "";
+        let after = "";
+        let fallback = "text";
+        let cursorOffset = null;
+
+        switch (kind) {
+          case "bold":
+            before = "**";
+            after = "**";
+            fallback = "bold text";
+            break;
+          case "italic":
+            before = "*";
+            after = "*";
+            fallback = "italic text";
+            break;
+          case "h2":
+            before = "## ";
+            after = "";
+            fallback = "Section title";
+            break;
+          case "bullet":
+            before = "- ";
+            after = "";
+            fallback = "List item";
+            break;
+          case "quote":
+            before = "> ";
+            after = "";
+            fallback = "Quoted text";
+            break;
+          case "link":
+            before = "[";
+            after = "](https://)";
+            fallback = "link label";
+            cursorOffset = before.length + fallback.length + 2;
+            break;
+          case "code":
+            before = "`";
+            after = "`";
+            fallback = "code";
+            break;
+          default:
+            return;
+        }
+
+        const inner = selected || fallback;
+        const insertion = before + inner + after;
+        ta.value = text.slice(0, start) + insertion + text.slice(end);
+        const selStart = start + before.length;
+        const selEnd = selStart + inner.length;
+        ta.focus();
+        if (kind === "link" && !selected) {
+          ta.setSelectionRange(start + cursorOffset, start + cursorOffset);
+        } else {
+          ta.setSelectionRange(selStart, selEnd);
+        }
+      }
+
+      function downloadDraftFile() {
+        const template = getSelectedTemplateMeta();
+        const slug = (template?.id || "filing-draft").replace(/[^a-z0-9-]/gi, "-");
+        const blob = new Blob([draftEditor.value], { type: "text/markdown;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `${slug}-${new Date().toISOString().slice(0, 10)}.md`;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+
+      function resetToTemplateSkeleton() {
+        const template = filingTemplates.find((t) => t.id === draftTemplateSelect.value);
+        if (!template?.body) {
+          draftStatusEl.textContent = "Template not loaded yet.";
+          return;
+        }
+        const company = draftCompanyInput.value.trim() || "[Company Name]";
+        const reportDate = new Date().toISOString().slice(0, 10);
+        draftEditor.value = template.body
+          .replaceAll("{{COMPANY_NAME}}", company)
+          .replaceAll("{{REPORT_DATE}}", reportDate);
+        draftStatusEl.textContent = "Template reset.";
+        setTimeout(() => (draftStatusEl.textContent = ""), 1500);
+      }
+
+      async function runDraftGeneration({ query, instructions, companyName, templateId, fromChat }) {
+        if (isGeneratingDraft) return;
+        const trimmedQuery = (query || "").trim();
+        if (!trimmedQuery) {
+          if (fromChat) {
+            statusEl.textContent = "Enter a prompt to generate a draft.";
+            setTimeout(() => (statusEl.textContent = ""), 2500);
+          } else {
+            draftStatusEl.textContent = "Enter an EDGAR search query.";
+          }
+          return;
+        }
+
+        draftQueryInput.value = trimmedQuery;
+        if (instructions !== undefined) {
+          draftInstructionsInput.value = instructions;
+        }
+        if (companyName !== undefined && companyName) {
+          draftCompanyInput.value = companyName;
+        }
+        const selectedTemplate = templateId || draftTemplateSelect.value;
+        draftTemplateSelect.value = selectedTemplate;
+        syncTemplateSelects(draftTemplateSelect);
+
+        isGeneratingDraft = true;
+        generateDraftBtn.disabled = true;
+        draftFromChatBtn.disabled = true;
+        sendButton.disabled = true;
+        draftStatusEl.textContent = "Searching EDGAR and generating draft…";
+        if (fromChat) {
+          addMessage("You", trimmedQuery, "user");
+          promptInput.value = "";
+          showThinkingMessage("Generating draft…");
+        }
+
+        try {
+          const payload = {
+            template_id: selectedTemplate,
+            query: trimmedQuery,
+            company_name: draftCompanyInput.value.trim() || undefined,
+            instructions: draftInstructionsInput.value.trim() || undefined,
+            max_results: 3,
+          };
+          const result = await fetchJSON("/sec/draft", {
+            method: "POST",
+            body: JSON.stringify(payload),
+          });
+          if (!result.success) {
+            throw new Error(result?.error?.message || "Draft generation failed");
+          }
+          draftEditor.value = result.data.draft || "";
+          applySourcesFromList(result.data.sources);
+          saveDraftToStorage();
+          setActiveView("draft");
+          draftStatusEl.textContent = `Draft ready (${result.data.ingested_filings?.length || 0} filings indexed).`;
+          if (fromChat) {
+            removeThinkingMessage();
+            addMessage("System", "Draft generated — edit in the Draft filing tab.", "assistant");
+          }
+        } catch (err) {
+          draftStatusEl.textContent = err.message;
+          if (fromChat) {
+            removeThinkingMessage();
+            addMessage("Error", err.message, "assistant");
+          }
+        } finally {
+          generateDraftBtn.disabled = false;
+          draftFromChatBtn.disabled = false;
+          sendButton.disabled = false;
+          isGeneratingDraft = false;
+        }
+      }
+
+      async function generateDraft() {
+        await runDraftGeneration({
+          query: draftQueryInput.value,
+          fromChat: false,
+        });
+      }
+
+      async function generateDraftFromChat() {
+        const question = promptInput.value.trim();
+        await runDraftGeneration({
+          query: question,
+          instructions: question ? `Shape the draft to address: ${question}` : "",
+          templateId: chatDraftTemplateSelect?.value || draftTemplateSelect.value,
+          fromChat: true,
+        });
       }
 
       async function fetchJSON(path, options) {
@@ -378,24 +1035,16 @@
           "Content-Type": "application/json",
           ...(options && options.headers ? options.headers : {}),
         };
-        const apiKey = apiKeyInput.value.trim();
-        const provider = llmProviderSelect.value;
-        const providerKey = providerKeyInput.value.trim();
-        if (apiKey) {
-          headers["X-API-Key"] = apiKey;
-        }
-        headers["X-LLM-Provider"] = provider;
-        if (providerKey) {
-          if (provider === "openai") {
-            headers["X-OpenAI-Key"] = providerKey;
-          } else {
-            headers["X-Anthropic-Key"] = providerKey;
-          }
-        }
         const response = await fetch(path, { ...options, headers });
         const json = await response.json();
         if (!response.ok) {
-          throw new Error(json?.error?.message || response.statusText);
+          let message = json?.error?.message || response.statusText;
+          if (json?.detail) {
+            message = typeof json.detail === "string"
+              ? json.detail
+              : JSON.stringify(json.detail);
+          }
+          throw new Error(message);
         }
         return json;
       }
@@ -416,7 +1065,8 @@
       }
 
       async function ingestFromQuestion(question) {
-        statusEl.textContent = "Searching SEC filings...";
+        setThinkingMessage("Searching SEC filings...");
+        statusEl.textContent = "";
         const formTypes = extractFormTypes(question);
         const searchPayload = { query: question, start: 0, count: 10 };
         if (formTypes) {
@@ -432,11 +1082,10 @@
         const results = searchResult.data.results || [];
         const validResults = results.filter(isValidSearchResult);
         if (validResults.length === 0) {
-          statusEl.textContent = "No valid filings found to ingest.";
           addMessage("System", "No valid SEC filings were found. Try adding a form type like 10-K or 10-Q.", "assistant");
           return false;
         }
-        statusEl.textContent = "Ingesting filings...";
+        setThinkingMessage("Ingesting filings...");
         for (const item of validResults) {
           await fetchJSON("/sec/ingest", {
             method: "POST",
@@ -462,43 +1111,32 @@
         isSubmitting = true;
         addMessage("You", question, "user");
         promptInput.value = "";
-        statusEl.textContent = "Thinking...";
+        showThinkingMessage("Thinking...");
         sendButton.disabled = true;
         try {
           if (autoIngestToggle && autoIngestToggle.checked) {
             const ingested = await ingestFromQuestion(question);
             if (!ingested) {
-              statusEl.textContent = "";
+              removeThinkingMessage();
               sendButton.disabled = false;
+              isSubmitting = false;
               return;
             }
           }
+          setThinkingMessage("Thinking...");
           const payload = { question };
           const result = await fetchJSON("/rag/query", {
             method: "POST",
             body: JSON.stringify(payload),
           });
+          removeThinkingMessage();
           if (!result.success) {
             throw new Error(result?.error?.message || "Request failed");
           }
           addMessage("Answer", result.data.answer || "No response.", "assistant");
-          sourceMap.clear();
-          const sources = result.data.sources || [];
-          for (const source of sources) {
-            const meta = source.metadata || {};
-            const accession = meta.accession_number;
-            const cik = meta.cik;
-            const url = buildFilingUrl(cik, accession);
-            const key = `${cik || "unknown"}:${accession || Math.random()}`;
-            if (!url) continue;
-            upsertSource({
-              key,
-              url,
-              title: `${accession || "Unknown filing"}`,
-              meta: `${meta.form_type || "SEC filing"}${meta.filed_date ? " • " + meta.filed_date : ""}`,
-            });
-          }
+          applySourcesFromList(result.data.sources);
         } catch (err) {
+          removeThinkingMessage();
           addMessage("Error", err.message, "assistant");
         } finally {
           statusEl.textContent = "";
@@ -585,8 +1223,22 @@
         }
       }
 
-      saveKeyButton.addEventListener("click", saveApiKey);
-      llmProviderSelect.addEventListener("change", onProviderChange);
+      themeToggle.addEventListener("click", toggleTheme);
+      tabChat.addEventListener("click", () => setActiveView("chat"));
+      tabDraft.addEventListener("click", () => setActiveView("draft"));
+      draftTemplateSelect.addEventListener("change", () => syncTemplateSelects(draftTemplateSelect));
+      chatDraftTemplateSelect.addEventListener("change", () => syncTemplateSelects(chatDraftTemplateSelect));
+      generateDraftBtn.addEventListener("click", generateDraft);
+      draftFromChatBtn.addEventListener("click", generateDraftFromChat);
+      document.querySelectorAll(".draft-format-bar [data-fmt]").forEach((btn) => {
+        btn.addEventListener("click", () => applyDraftFormat(btn.getAttribute("data-fmt")));
+      });
+      if (draftFontSelect) {
+        draftFontSelect.addEventListener("change", () => applyDraftFont(draftFontSelect.value));
+      }
+      loadTemplateSkeletonBtn.addEventListener("click", resetToTemplateSkeleton);
+      saveDraftLocalBtn.addEventListener("click", saveDraftToStorage);
+      downloadDraftBtn.addEventListener("click", downloadDraftFile);
       sendButton.addEventListener("click", sendPrompt);
       searchBtn.addEventListener("click", searchFilings);
       promptInput.addEventListener("keydown", (event) => {
@@ -595,8 +1247,16 @@
         }
       });
 
-      loadApiKey();
+      initDebugBadge();
+      initTheme();
+      initDraftFont();
       renderSources();
+      loadFilingTemplates().catch((err) => {
+        draftStatusEl.textContent = err.message;
+      });
+      loadDraftFromStorage();
+      const savedView = localStorage.getItem("uiView");
+      setActiveView(savedView === "draft" ? "draft" : "chat");
     </script>
   </body>
 </html>

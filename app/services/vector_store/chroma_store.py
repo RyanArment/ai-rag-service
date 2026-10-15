@@ -11,6 +11,27 @@ from app.core.logging_config import get_logger
 
 logger = get_logger(__name__)
 
+_CHROMA_SKIP_FILTER_KEYS = frozenset({"filed_date_from", "filed_date_to"})
+
+
+def _build_chroma_where(filter: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """Chroma requires $and when multiple metadata conditions are used."""
+    if not filter:
+        return None
+    clauses = []
+    for key, value in filter.items():
+        if key in _CHROMA_SKIP_FILTER_KEYS or value is None:
+            continue
+        if isinstance(value, (str, int, float, bool)):
+            clauses.append({key: value})
+        else:
+            clauses.append({key: str(value)})
+    if not clauses:
+        return None
+    if len(clauses) == 1:
+        return clauses[0]
+    return {"$and": clauses}
+
 
 class ChromaVectorStore(BaseVectorStore):
     """ChromaDB vector store implementation."""
@@ -80,7 +101,7 @@ class ChromaVectorStore(BaseVectorStore):
     ) -> List[SearchResult]:
         """Search for similar documents."""
         try:
-            where = filter if filter else None
+            where = _build_chroma_where(filter)
             
             results = self.collection.query(
                 query_embeddings=[query_embedding],
@@ -119,6 +140,16 @@ class ChromaVectorStore(BaseVectorStore):
             logger.error(f"Error searching ChromaDB: {e}", exc_info=True)
             raise
     
+    def delete_by_metadata(self, metadata_filter: Dict[str, Any]) -> bool:
+        """Delete documents matching metadata (best-effort)."""
+        try:
+            self.collection.delete(where=metadata_filter)
+            logger.info("Deleted documents from ChromaDB by metadata filter")
+            return True
+        except Exception as e:
+            logger.error(f"Error deleting by metadata from ChromaDB: {e}", exc_info=True)
+            return False
+
     def delete(self, ids: List[str]) -> bool:
         """Delete documents by IDs."""
         try:

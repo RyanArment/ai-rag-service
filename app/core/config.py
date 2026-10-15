@@ -10,12 +10,18 @@ load_dotenv()
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "anthropic")
 EMBEDDING_PROVIDER = os.getenv("EMBEDDING_PROVIDER")
 if not EMBEDDING_PROVIDER:
-    EMBEDDING_PROVIDER = "local" if LLM_PROVIDER == "anthropic" else "openai"
+    EMBEDDING_PROVIDER = "local" if LLM_PROVIDER in {"anthropic", "xai"} else "openai"
 LOCAL_EMBEDDING_MODEL = os.getenv("LOCAL_EMBEDDING_MODEL", "all-MiniLM-L6-v2")
 
 # API Keys
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL")
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+
+XAI_API_KEY = os.getenv("XAI_API_KEY")
+XAI_BASE_URL = os.getenv("XAI_BASE_URL", "https://api.x.ai/v1")
+XAI_MODEL = os.getenv("XAI_MODEL", "grok-4.7")
 API_KEY = os.getenv("API_KEY")
 API_KEY_HASH_PEPPER = os.getenv("API_KEY_HASH_PEPPER", "")
 

@@ -44,7 +44,9 @@ API_KEY=change-me
 API_KEY_HASH_PEPPER=optional-pepper
 
 # LLMs
-LLM_PROVIDER=anthropic  # or "openai"
+LLM_PROVIDER=xai  # or "openai", "anthropic"
+XAI_API_KEY=your_xai_key
+XAI_MODEL=grok-4-7
 ANTHROPIC_API_KEY=your_anthropic_key
 OPENAI_API_KEY=your_openai_key
 
